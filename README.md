@@ -34,9 +34,11 @@
 
 仓库保留三个工作流：`build.yml` 发布镜像和 Release，`openlist-check.yml` 执行回归测试及完整构建，`upstream-sync.yml` 跟随上游发布并调用同一验证流程。
 
-仓库每 6 小时检查一次上游正式 Release（不含预发布），按发布时间逐个合并到 `sync/upstream-*` 分支并创建**草稿 PR**，同时请求 OpenList 回归测试与打包检查。工作流不会自动合并到 `main`，测试通过和没有 Git 合并冲突也不能替代人工兼容性审查。审查时需检查 OpenList 下载器、合集入口、种子解析、配置、前端以及测试和同步工作流本身，确认最新 PR 提交的检查通过后，再手动将草稿转为可审查状态并合并。合并后的 Release 和 Docker 镜像通过手动运行 `build` 发布。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。
+仓库每 6 小时检查一次上游正式 Release（不含预发布），按发布时间逐个合并到 `sync/upstream-*` 分支并创建草稿 PR，同时请求 OpenList 回归测试与打包检查。GitHub 工作流不会仅凭测试通过就合并；关联本项目的 Codex 定时任务负责审查上游差异，修复冲突及兼容性问题并提交到 PR 分支。Codex 检查最新提交、运行回归和打包验证、确认没有待修复问题且基线为最新 `main` 后，会将草稿转为就绪并合并对应的已验证提交，不需要人工审查。未解决的错误、无法完成的验证或权限问题会阻止合并并报告原因。
 
-自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。该变量只控制上游同步分支和 PR 的准备，不会启用自动合并。设为 `false` 可以停止准备新的上游更新。
+自动审查重点是 OpenList 下载器、合集筛选与逐文件归档、重启恢复、种子解析、配置、前端以及测试和同步工作流本身。测试必须保留并随行为变化补充，不能通过移除测试掩盖回归。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。Release 和 Docker 镜像仍通过手动运行 `build` 发布。
+
+自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。设为 `false` 可以停止准备新的上游更新。Codex 自动审查与修复运行在配置了本项目和 GitHub 登录的本地 Codex 环境，依赖该环境可运行；暂停对应 Codex 定时任务会停止 AI 审查与自动合并，GitHub 仍可继续准备草稿 PR。
 
 OpenList 没有通用的做种比率、上传限速与全局 Tracker API；这些 qBittorrent 功能无法在 OpenList 后端等价实现。上游文档适用于通用功能，OpenList 的差异以本仓库记录为准。
 

@@ -13,7 +13,7 @@
 | `task` | RSS 检查、任务整理/通知、Bangumi 更新等循环任务，由 `TaskService` 启动 |
 | `service/DownloadService` | 订阅下载策略、下载路径、完成通知等业务逻辑 |
 | `service/CollectionService` | 上传种子的合集预览、过滤、集数和命名规则、合集下载分支 |
-| `.github/workflows` | OpenList 回归与打包、手动发布 JAR/EXE/镜像、可选上游同步草稿 PR（人工审查及手动合并） |
+| `.github/workflows` | OpenList 回归与打包、手动发布 JAR/EXE/镜像、可选上游同步草稿 PR（Codex 自动审查、修复及验证后合并） |
 
 ## 普通 OpenList 下载
 

@@ -78,15 +78,11 @@ jobs:
             --title "Sync upstream ${RELEASE_TAG}" \
             --body "Upstream release: https://github.com/wushuo894/ani-rss/releases/tag/${RELEASE_TAG}
 
-          This draft PR prepares the upstream release for manual review. It will NEVER be merged automatically by this workflow, even if all checks pass.
+          This draft PR is prepared for automated Codex compatibility review and repair. The GitHub workflow itself never merges based only on a green build.
 
-          Before manually merging:
-          - Inspect changes to the OpenList downloader, collection service, torrent metadata, configuration, and frontend.
-          - Confirm all OpenList and collection regression tests pass on the latest PR head.
-          - Check that upstream changes preserve the test suite and this manual-review workflow.
-          - Resolve conflicts and test the selected OpenList Driver when download behavior changes.
+          Codex reviews the latest PR head, preserves the OpenList downloader and collection behavior, repairs regressions and conflicts, commits fixes to this branch, and runs verification again. It can then mark this PR ready and merge the exact verified head when the base is current and no actionable findings remain.
 
-          Convert the draft to ready and merge only after review. Releases remain a separate manual build dispatch." \
+          Review includes downloader lifecycle, collection preview and mapping, restart recovery, API semantics, configuration, frontend, regression tests, and automation workflows. Failed or incomplete verification blocks merging." \
             --label upstream-sync)
           gh workflow run openlist-check.yml --ref "$SYNC_BRANCH"
           echo "Opened $pr_url"
