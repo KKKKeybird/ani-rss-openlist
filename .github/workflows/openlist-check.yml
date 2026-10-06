@@ -24,3 +24,10 @@ jobs:
         run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
         run: bash ./package.sh
+
+  cloud-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify Codex Cloud merge and release gates
+        run: python3 -m unittest discover -s .github/scripts -p 'test_codex_cloud_sync.py'

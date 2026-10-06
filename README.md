@@ -30,15 +30,15 @@
 
 当前实现支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动和待验证事项见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。代码尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
 
-手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 同一上游版本的修复发布通过 `build` 的 `release_revision` 参数生成独立标签（例如 `v3.2.39-openlist-r1`），应用版本仍保持 `3.2.39`。
+手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 Release 固定使用 `v上游版本-openlist`（例如 `v3.2.40-openlist`），应用版本仍为上游 `3.2.40`，不生成 `r1`、构建计数或额外版本数字。已发布版本的标签不会被覆盖；若同一上游版本已有发布，则保留它并等待下一个上游版本。
 
-仓库保留三个工作流：`build.yml` 发布镜像和 Release，`openlist-check.yml` 执行回归测试及完整构建，`upstream-sync.yml` 跟随上游发布并调用同一验证流程。
+仓库维护以下工作流：`build.yml` 发布镜像和 Release，`openlist-check.yml` 执行回归测试及完整构建，`upstream-sync.yml` 准备上游同步 PR，`codex-cloud-sync.yml` 每 30 分钟协调云端审查与修复，并在审查及独立验证通过后合并。
 
 仓库每 6 小时检查一次上游正式 Release（不含预发布），按发布时间逐个合并到 `sync/upstream-*` 分支并创建草稿 PR，同时请求 OpenList 回归测试与打包检查。GitHub 工作流不会仅凭测试通过就合并；Codex 云端任务负责审查上游差异，修复冲突及兼容性问题并提交到 PR 分支。Codex 检查最新提交、运行回归和打包验证、确认没有待修复问题且基线为最新 `main` 后，会将草稿转为就绪并合并对应的已验证提交，不需要人工审查。未解决的错误、无法完成的验证或权限问题会阻止合并并报告原因。
 
-自动审查重点是 OpenList 下载器、合集筛选与逐文件归档、重启恢复、种子解析、配置、前端以及测试和同步工作流本身。测试必须保留并随行为变化补充，不能通过移除测试掩盖回归。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。Release 和 Docker 镜像仍通过手动运行 `build` 发布。
+**首要约束是保证所有 OpenList 相关功能可用。** 上游改动与本 fork 冲突时，优先保留或修复 OpenList，无法确认兼容时不能合并。自动审查重点是 OpenList 下载器、合集筛选与逐文件归档、重启恢复、种子解析、配置、前端以及测试和同步工作流本身。测试必须保留并随行为变化补充，不能通过移除测试掩盖回归。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。Codex 审查和独立验证通过并合并上游 PR 后，会触发 `build` 发布该上游版本的 Release 与 Docker 镜像；也可手动运行 `build`。
 
-自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。设为 `false` 可以停止准备新的上游更新。Codex 自动审查与修复使用 GitHub 上的 `@codex` 云端集成，需要在 Codex 设置中连接本仓库并启用代码审查；不使用本地定时任务。云端联通与自动合并流程仍在配置验证中，尚未收到有效云端审查结果时不会合并。
+自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。设为 `false` 可以停止准备新的上游更新。Codex 自动审查与修复使用 GitHub 上的 `@codex` 云端集成，需要在 Codex 设置中连接本仓库并启用代码审查；不使用本地定时任务。协调工作流只接受官方 `chatgpt-codex-connector[bot]` 返回的明确结果，要求审查覆盖最新 PR 提交和当前 `main`，无剩余问题且独立验证成功才会合并；普通评论和旧提交审查结果不算批准。原生 Codex Cloud 的实际模型由服务选择，本流程不强行固定模型或推理强度。原生云端审查连接已验证，云端修复任务的结构化结果及完整自动合并链路还需要首个实际同步 PR 验证。
 
 OpenList 没有通用的做种比率、上传限速与全局 Tracker API；这些 qBittorrent 功能无法在 OpenList 后端等价实现。上游文档适用于通用功能，OpenList 的差异以本仓库记录为准。
 

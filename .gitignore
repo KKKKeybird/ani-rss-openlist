@@ -51,3 +51,6 @@ logs
 ani-rss-update.exe
 *.versionsBackup
 .pnpm-store
+
+# Python workflow tooling
+__pycache__/

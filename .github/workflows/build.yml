@@ -2,12 +2,6 @@ name: build
 
 on:
   workflow_dispatch:
-    inputs:
-      release_revision:
-        description: Optional fork release revision (keeps the application version unchanged)
-        required: false
-        default: ''
-        type: string
 
 permissions:
   contents: write
@@ -31,17 +25,16 @@ jobs:
       - name: Verify OpenList compatibility
         run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
-        env:
-          RELEASE_REVISION: ${{ inputs.release_revision }}
         run: |
           set -euo pipefail
           bash ./package.sh
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f pom.xml)
-          if [ -n "$RELEASE_REVISION" ] && [[ ! "$RELEASE_REVISION" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
-            echo "::error::Invalid release revision"
+          upstream_tag=$(tr -d '\r\n' < .github/upstream-release.txt)
+          if [ "$upstream_tag" != "v${version}" ]; then
+            echo "::error::Application version ${version} does not match tracked upstream ${upstream_tag}"
             exit 1
           fi
-          release_tag="v${version}-openlist${RELEASE_REVISION:+-${RELEASE_REVISION}}"
+          release_tag="${upstream_tag}-openlist"
           existing_sha=$(git ls-remote --tags origin "refs/tags/${release_tag}" | awk 'NR == 1 {print $1}')
           if [ -n "$existing_sha" ] && [ "$existing_sha" != "$GITHUB_SHA" ]; then
             echo "::error::Tag ${release_tag} already points to ${existing_sha}; refusing to replace a release with artifacts from ${GITHUB_SHA}"

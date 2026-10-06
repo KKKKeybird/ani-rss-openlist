@@ -4,6 +4,14 @@ This repository maintains the native OpenList downloader and collection support
 independently of upstream ANI-RSS. Java 25 is required; Maven builds both the Vue
 frontend and Spring Boot application.
 
+## Primary maintenance priority
+
+OpenList functionality is the first priority. Upstream synchronization must not
+remove, disable, or regress any OpenList feature to accommodate upstream changes.
+When upstream behavior conflicts with this fork, preserve or adapt the OpenList
+implementation first. Repair incompatibilities before merging; if functionality
+cannot be established, leave the PR unmerged and report the concrete blocker.
+
 ## Code Review Rules
 
 Review upstream changes for semantic compatibility, not only merge conflicts or

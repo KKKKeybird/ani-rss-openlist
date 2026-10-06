@@ -78,9 +78,9 @@ jobs:
             --title "Sync upstream ${RELEASE_TAG}" \
             --body "Upstream release: https://github.com/wushuo894/ani-rss/releases/tag/${RELEASE_TAG}
 
-          This draft PR is prepared for automated Codex compatibility review and repair. The GitHub workflow itself never merges based only on a green build.
+          This draft PR is prepared for automated Codex Cloud compatibility review and repair. The GitHub workflow itself never merges based only on a green build.
 
-          Codex reviews the latest PR head, preserves the OpenList downloader and collection behavior, repairs regressions and conflicts, commits fixes to this branch, and runs verification again. It can then mark this PR ready and merge the exact verified head when the base is current and no actionable findings remain.
+          Codex Cloud prioritizes keeping every OpenList feature usable, reviews the latest PR head, preserves the OpenList downloader and collection behavior, repairs regressions and conflicts, commits fixes to this branch, and runs verification again. It can then mark this PR ready and merge the exact verified head when the base is current and no actionable findings remain.
 
           Review includes downloader lifecycle, collection preview and mapping, restart recovery, API semantics, configuration, frontend, regression tests, and automation workflows. Failed or incomplete verification blocks merging." \
             --label upstream-sync)

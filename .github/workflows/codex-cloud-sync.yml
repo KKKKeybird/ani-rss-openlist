@@ -1,0 +1,32 @@
+name: Codex Cloud upstream maintenance
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  coordinate:
+    if: vars.UPSTREAM_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Validate coordinator gates
+        run: python3 -m unittest discover -s .github/scripts -p 'test_codex_cloud_sync.py'
+      - name: Request cloud review, verify latest head, and merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/codex_cloud_sync.py
