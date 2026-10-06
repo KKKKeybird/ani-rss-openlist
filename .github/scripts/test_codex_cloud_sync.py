@@ -120,7 +120,7 @@ class CoordinatorTests(CloudApprovalTests):
 
     def test_latest_failed_ci_requests_cloud_repair_instead_of_merging(self):
         runs = [dict(id=2, head_sha='head-1', head_branch='sync/upstream-v3.2.40',
-                     event='workflow_dispatch', status='completed', conclusion='failure'),
+                     event='workflow_dispatch', status='completed', conclusion='failure', updated_at='2026-10-06T01:00:02Z'),
                 dict(id=1, head_sha='head-1', head_branch='sync/upstream-v3.2.40',
                      event='workflow_dispatch', status='completed', conclusion='success')]
         calls, _, tasks = self.run_process(runs=runs)

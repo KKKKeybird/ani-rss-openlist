@@ -72,7 +72,7 @@ def approved_result(comment, requests, head, base):
 
 def request_task(repo, number, head, base):
     request = {"id": uuid.uuid4().hex, "head": head, "base": base}
-    body = f'''@codex inspect this upstream synchronization PR, repair compatibility problems, and push fixes to this PR's existing branch.
+    body = f'''@codex fix any OpenList compatibility regressions, review feedback, or CI failures in this PR and push repairs to its existing branch.
 
 {REQUEST}{json.dumps(request)} -->
 
@@ -144,6 +144,10 @@ def process(repo, number):
         print(f"PR #{number}: verification still running")
         return
     if latest["conclusion"] != "success":
+        if latest.get("updated_at", "") < responses[-1]["created_at"]:
+            gh("workflow", "run", CHECK_WORKFLOW, "--repo", repo, "--ref", pr["head"]["ref"])
+            print(f"PR #{number}: rerunning verification after fresh cloud approval of unchanged head")
+            return
         attempts = sum(request["head"] == head and request["base"] == base for request in requests.values())
         if attempts >= 3:
             raise RuntimeError(f"PR #{number}: independent verification repeatedly failed; no merge")
