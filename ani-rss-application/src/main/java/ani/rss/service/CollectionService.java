@@ -2,6 +2,8 @@ package ani.rss.service;
 
 import ani.rss.commons.FileUtils;
 import ani.rss.download.qBittorrent;
+import ani.rss.download.OpenList;
+import jakarta.annotation.Resource;
 import ani.rss.entity.Ani;
 import ani.rss.entity.CollectionInfo;
 import ani.rss.entity.Config;
@@ -37,15 +39,25 @@ public class CollectionService {
 
     private static final Config CONFIG = ConfigUtil.CONFIG;
 
+    @Resource
+    private OpenList openList;
+
     /**
      * 开始下载合集
      *
      * @param collectionInfo 合集信息
      */
     public void startCollection(CollectionInfo collectionInfo) {
-        String torrent = collectionInfo.getTorrent();
         File tempFile = FileUtil.createTempFile();
-        Base64.decodeToFile(torrent, tempFile);
+        try {
+            Base64.decodeToFile(collectionInfo.getTorrent(), tempFile);
+            startCollection(collectionInfo, tempFile);
+        } finally {
+            FileUtil.del(tempFile);
+        }
+    }
+
+    private void startCollection(CollectionInfo collectionInfo, File tempFile) {
         TorrentMetadata torrentFile;
         try {
             torrentFile = TorrentMetadata.from(tempFile);
@@ -58,6 +70,12 @@ public class CollectionService {
         String downloadPath = ani.getCustomDownloadPathTemplate();
 
         String name = StrFormatter.format("[{}] {} 第{}季", subgroup, title, ani.getSeason());
+        if ("OpenList".equals(CONFIG.getDownloadToolType())) {
+            Assert.isTrue(TorrentUtil.login(), "下载器登录失败");
+            openList.downloadCollection(name, torrentFile, downloadPath, preview(collectionInfo),
+                    List.of("ANI-RSS合集下载", subgroup));
+            return;
+        }
         download(name, tempFile, downloadPath, List.of("ANI-RSS合集下载", subgroup));
 
         TorrentsInfo torrentsInfo = new TorrentsInfo()
@@ -169,7 +187,7 @@ public class CollectionService {
      */
     public void download(String name, File torrentFile, String savePath, List<String> tags) {
         String download = CONFIG.getDownloadToolType();
-        Assert.isTrue("qBittorrent".equals(download), "合集下载暂时只支持 qBittorrent");
+        Assert.isTrue("qBittorrent".equals(download), "合集下载仅支持 qBittorrent 和 OpenList");
 
         Assert.isTrue(TorrentUtil.login(), "下载器登录失败");
 
@@ -215,9 +233,16 @@ public class CollectionService {
      * @return 项目列表
      */
     public List<Item> preview(CollectionInfo collectionInfo) {
-        String torrent = collectionInfo.getTorrent();
         File tempFile = FileUtil.createTempFile();
-        Base64.decodeToFile(torrent, tempFile);
+        try {
+            Base64.decodeToFile(collectionInfo.getTorrent(), tempFile);
+            return preview(collectionInfo, tempFile);
+        } finally {
+            FileUtil.del(tempFile);
+        }
+    }
+
+    private List<Item> preview(CollectionInfo collectionInfo, File tempFile) {
         TorrentMetadata torrentFile;
         try {
             torrentFile = TorrentMetadata.from(tempFile);

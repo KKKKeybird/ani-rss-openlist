@@ -60,3 +60,11 @@ Ani-RSS 的 `Aria2` 后端调用 `getGlobalStat`、`addTorrent`、`tellActive`�
 - `ani-rss-application/src/main/java/ani/rss/util/other/OpenListUtil.java`
 
 本 fork 的 OpenList 实现从 `v3.2.38` 建立。NAS 仍使用原配置与容器。
+
+## 合集下载兼容（2026-10-06）
+
+`CollectionService` 按下载器分支，将 OpenList 合集预览条目交给 `OpenList.downloadCollection`。提交完整种子的磁力链接，普通任务轮询负责等待离线完成、重试及整理。`OpenListCollectionOrganizer` 按完整相对路径及大小定位每个文件，先检查所有文件和冲突再持久化整理计划；逐文件重命名、等待移动及确认目标文件可见后才完成。重启后继续处理已重命名、部分已移动的任务。
+
+匹配、排除、字幕扩展名、集数偏移和重命名模板沿用原有预览逻辑。通用 OpenList 离线接口不支持种子文件优先级，因此被排除的文件仍会下载，保留于独立暂存目录；用户明确删除任务及文件时也会删除该暂存目录。归档文件及暂存文件都只属于本程序提交的任务。
+
+自动回归覆盖多集及字幕、嵌套路径、缺失文件、重复目标名、已存在的目标、移动失败和重启后部分归档恢复。真实 Driver 的离线下载、云端转存时序仍需实例验证。

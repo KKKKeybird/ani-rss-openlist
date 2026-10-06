@@ -7,6 +7,9 @@
     <div v-loading="loading" style="height: 500px;">
       <el-scrollbar style="padding: 0 12px;">
         <div>
+          <el-alert v-if="downloadToolType === 'OpenList'"
+                    title="OpenList 将下载完整种子，完成后按预览筛选、重命名并归档。排除文件保留在暂存目录，任务进度请在下载列表查看。"
+                    type="info" :closable="false" show-icon style="margin-bottom: 12px;"/>
           <el-form @submit.prevent label-width="auto">
             <el-form-item label="番剧名称">
               <div class="full-width">
@@ -273,9 +276,11 @@ let data = ref({
   show: false,
 })
 
+let downloadToolType = ref('')
 let dialogVisible = ref(false)
 
 let show = () => {
+  http.config().then(res => { downloadToolType.value = res.data.downloadToolType })
   data.value.show = false
   data.value.ani.title = ''
   data.value.torrent = ''

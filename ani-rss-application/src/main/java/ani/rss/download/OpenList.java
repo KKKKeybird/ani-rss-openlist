@@ -10,6 +10,7 @@ import ani.rss.enums.TorrentsTagEnum;
 import ani.rss.util.other.ConfigUtil;
 import ani.rss.util.other.OpenListUtil;
 import ani.rss.util.other.TorrentUtil;
+import ani.rss.util.other.TorrentMetadata;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Assert;
@@ -72,7 +73,9 @@ public class OpenList implements BaseDownload {
             if (!task.isCompleted()) {
                 openListUtil.taskInfo(taskId).ifPresent(info -> {
                     taskStore.progress(taskId, info);
-                    if (info.getState() == OpenListTaskInfo.State.Succeeded) {
+                    if (!taskStore.get(taskId).getCollectionFiles().isEmpty()) {
+                        reconcileCollection(taskId, info);
+                    } else if (info.getState() == OpenListTaskInfo.State.Succeeded) {
                         try {
                             finishTask(taskId, System.currentTimeMillis() + 60_000L);
                         } catch (Exception e) {
@@ -80,6 +83,13 @@ public class OpenList implements BaseDownload {
                         }
                     }
                 });
+                var current = taskStore.get(taskId);
+                if (!current.getCollectionFiles().isEmpty() && !current.isCompleted()
+                        && !OpenListTaskInfo.State.Succeeded.name().equals(current.getState())
+                        && System.currentTimeMillis() >= current.getSubmittedAt()
+                        + Math.max(1, CONFIG.getOpenListDownloadTimeout()) * 60_000L) {
+                    taskStore.failed(taskId, "合集下载超时");
+                }
             }
             task = taskStore.get(task.getId());
             long size = task.getSize();
@@ -101,6 +111,59 @@ public class OpenList implements BaseDownload {
             result.add(info);
         }
         return result;
+    }
+
+    /** Submit immediately; the regular task poller handles completion and restart recovery. */
+    public synchronized void downloadCollection(String name, TorrentMetadata torrent, String savePath,
+                                                List<Item> items, List<String> tags) {
+        List<OpenListTaskStore.CollectionFile> entries = items.stream().map(item ->
+                new OpenListTaskStore.CollectionFile().setSource(item.getTitle())
+                        .setTarget(item.getReName()).setLength(item.getLength())).toList();
+        OpenListCollectionOrganizer.validate(entries);
+        Assert.notBlank(savePath, "未设置合集下载位置");
+        savePath = ReUtil.replaceAll(savePath, "^[A-Za-z]:", "").replace('\\', '/');
+        savePath = ReUtil.replaceAll(savePath, "/+$", "");
+        if (savePath.isEmpty()) {
+            savePath = "/";
+        }
+        String hash = torrent.getHash();
+        Assert.isFalse(taskStore.list().stream().anyMatch(task -> hash.equals(task.getHash())),
+                "OpenList 合集任务已存在，请先在下载列表中处理原任务");
+        Assert.isTrue(openListUtil.mkdir(savePath), "OpenList 创建下载目录失败: {}", savePath);
+        String stage = (savePath.equals("/") ? "" : savePath) + "/.ani-rss-openlist-" + UUID.randomUUID();
+        Assert.isTrue(openListUtil.mkdir(stage), "OpenList 创建暂存目录失败: {}", stage);
+        String tid = openListUtil.fsAddOfflineDownload(torrent.getMagnetUri(), stage, CONFIG.getProvider());
+        taskStore.submitted(new OpenListTaskStore.Task().setId(tid).setHash(hash).setName(name)
+                .setSavePath(savePath).setStagingPath(stage).setTags(new ArrayList<>(tags))
+                .setCollectionFiles(entries).setSubmittedAt(System.currentTimeMillis()));
+    }
+
+    private void reconcileCollection(String id, OpenListTaskInfo info) {
+        var task = taskStore.get(id);
+        long deadline = task.getSubmittedAt() + Math.max(1, CONFIG.getOpenListDownloadTimeout()) * 60_000L;
+        try {
+            if (info.getState() == OpenListTaskInfo.State.Succeeded) {
+                // Transfer completion and cloud file visibility are separate stages.
+                finishTask(id, System.currentTimeMillis() + 60_000L);
+            } else if (System.currentTimeMillis() >= deadline) {
+                taskStore.failed(id, "合集下载超时");
+            } else if (List.of(OpenListTaskInfo.State.Error, OpenListTaskInfo.State.Failing,
+                    OpenListTaskInfo.State.Failed).contains(info.getState())) {
+                long limit = CONFIG.getOpenListDownloadRetryNumber();
+                if (limit < 0 || task.getRetries() < limit) {
+                    Assert.isTrue(openListUtil.taskRetry(id), "OpenList 合集重试失败: {}", id);
+                    taskStore.retried(id);
+                } else {
+                    taskStore.failed(id, "合集离线下载失败，已达到重试次数: " + info.getError());
+                }
+            } else if (List.of(OpenListTaskInfo.State.Canceling, OpenListTaskInfo.State.Canceled)
+                    .contains(info.getState())) {
+                taskStore.failed(id, "合集任务已取消");
+            }
+        } catch (Exception e) {
+            taskStore.failed(id, e.getMessage());
+            log.warn("OpenList 合集整理待重试 {}: {}", id, e.getMessage());
+        }
     }
 
     @Override
@@ -230,6 +293,9 @@ public class OpenList implements BaseDownload {
         if (task.isCompleted()) {
             return true;
         }
+        if (!task.getCollectionFiles().isEmpty()) {
+            return new OpenListCollectionOrganizer(openListUtil, taskStore).finish(tid, deadline);
+        }
         String savePath = task.getSavePath();
         String path = task.getStagingPath();
         String reName = task.getName();
@@ -327,8 +393,8 @@ public class OpenList implements BaseDownload {
             if (!owned.isEmpty() && !openListUtil.fsRemove(task.getSavePath(), owned)) {
                 return false;
             }
-            if (!task.isCompleted()) {
-                String stageName = task.getStagingPath().substring(task.getSavePath().length() + 1);
+            if (!task.isCompleted() || !task.getCollectionFiles().isEmpty()) {
+                String stageName = task.getStagingPath().substring(task.getStagingPath().lastIndexOf('/') + 1);
                 if (present.contains(stageName)
                         && !openListUtil.fsRemove(task.getSavePath(), List.of(stageName))) {
                     return false;

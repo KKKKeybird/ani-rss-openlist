@@ -29,7 +29,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Verify OpenList compatibility
-        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
         env:
           RELEASE_REVISION: ${{ inputs.release_revision }}

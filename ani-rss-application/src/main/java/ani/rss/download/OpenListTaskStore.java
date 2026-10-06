@@ -154,6 +154,10 @@ public class OpenListTaskStore {
                 .setName(source.getName())
                 .setSavePath(source.getSavePath())
                 .setStagingPath(source.getStagingPath())
+                .setCollectionFiles(source.getCollectionFiles().stream().map(CollectionFile::copy).toList())
+                .setCollectionPlanned(source.isCollectionPlanned())
+                .setSubmittedAt(source.getSubmittedAt())
+                .setRetries(source.getRetries())
                 .setTags(new ArrayList<>(source.getTags()))
                 .setFiles(new ArrayList<>(source.getFiles()))
                 .setSize(source.getSize())
@@ -161,6 +165,35 @@ public class OpenListTaskStore {
                 .setState(source.getState())
                 .setError(source.getError())
                 .setCompleted(source.isCompleted());
+    }
+
+    public synchronized void planCollection(String id, List<CollectionFile> entries) {
+        Task task = require(id);
+        task.setCollectionFiles(entries.stream().map(CollectionFile::copy).toList());
+        task.setCollectionPlanned(true);
+        task.setFiles(entries.stream().map(CollectionFile::getTarget).toList());
+        task.setSize(entries.stream().mapToLong(CollectionFile::getLength).sum());
+        save();
+    }
+
+    public synchronized void retried(String id) {
+        require(id).setRetries(require(id).getRetries() + 1);
+        save();
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class CollectionFile {
+        private String source;
+        private String target;
+        private long length;
+        // Absolute source file path, resolved before any cloud mutation.
+        private String resolvedPath;
+
+        private CollectionFile copy() {
+            return new CollectionFile().setSource(source).setTarget(target)
+                    .setLength(length).setResolvedPath(resolvedPath);
+        }
     }
 
     @Data
@@ -173,6 +206,10 @@ public class OpenListTaskStore {
         private String stagingPath;
         private List<String> tags = new ArrayList<>();
         private List<String> files = new ArrayList<>();
+        private List<CollectionFile> collectionFiles = new ArrayList<>();
+        private boolean collectionPlanned;
+        private long submittedAt;
+        private long retries;
         private long size;
         private int progress;
         private String state = OpenListTaskInfo.State.Pending.name();

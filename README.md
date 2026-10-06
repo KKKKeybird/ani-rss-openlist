@@ -22,11 +22,13 @@
 
 </div>
 
+项目结构和下载流程见 [项目梳理](docs/project-overview.md)。
+
 ## 关于这个 fork
 
 这是基于 [ANI-RSS 上游项目](https://github.com/wushuo894/ani-rss) 的社区维护 fork。这里的 `main` 持续维护原生 OpenList 下载器，供需要 OpenList 的用户跟踪和贡献；它不是上游官方发布版本。
 
-当前实现支持 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动和待验证事项见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。代码尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
+当前实现支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动和待验证事项见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。代码尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
 
 `main` 通过后会自动生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 同一上游版本的修复发布通过 `build` 的 `release_revision` 参数生成独立标签（例如 `v3.2.39-openlist-r1`），应用版本仍保持 `3.2.39`。
 
@@ -37,6 +39,12 @@
 自动创建同步 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。Copilot 批准功能需要在 Settings → Copilot → Code review 中开启 **Allow Copilot to approve pull requests**。如果 Copilot 无法批准，PR 会保留，自动合并不会绕过审查。
 
 OpenList 没有通用的做种比率、上传限速与全局 Tracker API；这些 qBittorrent 功能无法在 OpenList 后端等价实现。上游文档适用于通用功能，OpenList 的差异以本仓库记录为准。
+
+### OpenList 合集下载
+
+在设置中选择 OpenList、配置地址、令牌和 Driver 后，从订阅页「添加合集」上传种子，先预览再开始。任务提交后返回，进度与错误在下载列表查看；离线任务完成后按预览逐文件重命名、移动，并确认目标文件名及大小后标记完成。文件映射与整理计划持久化，服务重启后可继续。
+
+OpenList 通用离线 API 不支持 qBittorrent 的种子内文件优先级，因此会下载完整种子，匹配/排除只影响最终归档。被排除的文件留在下载目录下的 `.ani-rss-openlist-*` 暂存目录供手动处理。空预览、重复目标名、目标已存在、源文件缺失或路径不唯一时拒绝操作，避免覆盖和错配。合集采用预览中的文件名，与 qBittorrent 合集行为一致。
 
 ## 上游项目说明（保留）
 
