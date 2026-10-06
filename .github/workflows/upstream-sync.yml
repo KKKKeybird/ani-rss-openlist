@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
+    inputs:
+      cloud_probe_pr:
+        description: Optional PR number for a cloud trigger probe (does not merge)
+        type: number
+        default: 0
+        required: false
   pull_request_target:
     types: [closed]
 
@@ -19,7 +25,7 @@ concurrency:
 
 jobs:
   sync:
-    if: vars.UPSTREAM_SYNC_ENABLED == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: vars.UPSTREAM_SYNC_ENABLED == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.cloud_probe_pr == 0))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -111,3 +117,21 @@ jobs:
             gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
             echo "Deleted merged PR #${number} branch ${branch}"
           done
+
+  cloud-trigger-probe:
+    if: github.event_name == 'workflow_dispatch' && inputs.cloud_probe_pr > 0
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Verify native cloud tasks can be triggered by the workflow identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBE_PR: ${{ inputs.cloud_probe_pr }}
+        run: |
+          set -euo pipefail
+          [[ "$PROBE_PR" =~ ^[0-9]+$ ]]
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PROBE_PR}")
+          echo "$pr" | python3 -c 'import json,os,sys; p=json.load(sys.stdin); assert p["state"] == "open" and p["base"]["ref"] == "main" and p["head"]["repo"]["full_name"] == os.environ["GITHUB_REPOSITORY"] and p["head"]["ref"].startswith("codex/cloud-")'
+          gh pr comment "$PROBE_PR" --repo "$GITHUB_REPOSITORY" --body '@codex answer this cloud integration probe. Do not change code or merge this PR. Confirm that a GitHub Actions request can start a native cloud task in the ANI-RSS OpenList maintenance environment, and reply with CLOUD_TRIGGER_OK if successful. OpenList functionality must remain the first priority.'
