@@ -4,9 +4,6 @@ on:
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: [OpenList compatibility check]
-    types: [completed]
   pull_request_target:
     types: [closed]
 
@@ -77,58 +74,22 @@ jobs:
         run: |
           set -euo pipefail
           gh label create upstream-sync --color 0969da --description 'Upstream release synchronization' --force
-          pr_url=$(gh pr create --base main --head "$SYNC_BRANCH" \
+          pr_url=$(gh pr create --draft --base main --head "$SYNC_BRANCH" \
             --title "Sync upstream ${RELEASE_TAG}" \
             --body "Upstream release: https://github.com/wushuo894/ani-rss/releases/tag/${RELEASE_TAG}
 
-          This PR merges the upstream release into the OpenList fork. It will merge automatically when verification passes, the base is current, and GitHub reports no merge conflicts. Review changes to the native OpenList downloader carefully." \
+          This draft PR prepares the upstream release for manual review. It will NEVER be merged automatically by this workflow, even if all checks pass.
+
+          Before manually merging:
+          - Inspect changes to the OpenList downloader, collection service, torrent metadata, configuration, and frontend.
+          - Confirm all OpenList and collection regression tests pass on the latest PR head.
+          - Check that upstream changes preserve the test suite and this manual-review workflow.
+          - Resolve conflicts and test the selected OpenList Driver when download behavior changes.
+
+          Convert the draft to ready and merge only after review. Releases remain a separate manual build dispatch." \
             --label upstream-sync)
           gh workflow run openlist-check.yml --ref "$SYNC_BRANCH"
           echo "Opened $pr_url"
-
-  merge-verified:
-    needs: sync
-    if: always() && vars.UPSTREAM_SYNC_ENABLED == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-    steps:
-      - name: Merge verified sync PRs without conflicts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh pr list --repo "$GITHUB_REPOSITORY" --state open --label upstream-sync \
-            --json number,headRefName --jq '.[] | [.number,.headRefName] | @tsv' |
-          while IFS=$'\t' read -r number branch; do
-            [ -n "$number" ] || continue
-            case "$branch" in sync/upstream-*) ;; *) continue ;; esac
-            head_sha=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq '.head.sha')
-            base_sha=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq '.base.sha')
-            gh api "repos/${GITHUB_REPOSITORY}/compare/${base_sha}...${head_sha}" \
-              --jq '.merge_base_commit.sha' | grep -Fxq "$base_sha" || {
-                echo "PR #${number}: base moved; manual branch refresh required"
-                continue
-              }
-            verified=$(gh run list --repo "$GITHUB_REPOSITORY" \
-              --workflow openlist-check.yml --event workflow_dispatch --branch "$branch" --limit 100 \
-              --json headSha,status,conclusion \
-              --jq "any(.[]; .headSha == \"${head_sha}\" and .status == \"completed\" and .conclusion == \"success\")")
-            if [ "$verified" != true ]; then
-              echo "PR #${number}: dispatch verification has not passed"
-              continue
-            fi
-            mergeable=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq '.mergeable')
-            if [ "$mergeable" != true ]; then
-              echo "PR #${number}: mergeable is ${mergeable}; not merging"
-              continue
-            fi
-            gh pr merge "$number" --repo "$GITHUB_REPOSITORY" --merge --delete-branch --match-head-commit "$head_sha"
-            gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref main
-            echo "Merged PR #${number} and dispatched fork release build"
-          done
 
   cleanup-merged-branch:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true)

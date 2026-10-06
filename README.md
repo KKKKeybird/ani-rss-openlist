@@ -30,13 +30,13 @@
 
 当前实现支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动和待验证事项见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。代码尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
 
-`main` 通过后会自动生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 同一上游版本的修复发布通过 `build` 的 `release_revision` 参数生成独立标签（例如 `v3.2.39-openlist-r1`），应用版本仍保持 `3.2.39`。
+手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 同一上游版本的修复发布通过 `build` 的 `release_revision` 参数生成独立标签（例如 `v3.2.39-openlist-r1`），应用版本仍保持 `3.2.39`。
 
 仓库保留三个工作流：`build.yml` 发布镜像和 Release，`openlist-check.yml` 执行回归测试及完整构建，`upstream-sync.yml` 跟随上游发布并调用同一验证流程。
 
-仓库每 6 小时检查一次上游正式 Release（不含预发布），按发布时间逐个合并到 `sync/upstream-*` 分支并创建 PR。PR 会请求 Copilot 审查并运行 OpenList 回归测试与打包检查；只有 Copilot 对最新提交明确批准且检查成功，才会自动合并并触发本 fork 的 Release 和 Docker 构建。合并冲突、审查意见或检查失败时保留 PR 等待处理。GitHub Copilot 的批准能力目前属于公开预览，需在仓库设置中启用；未启用时同步 PR 会停在审查环节，不会绕过审查自动合并。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。
+仓库每 6 小时检查一次上游正式 Release（不含预发布），按发布时间逐个合并到 `sync/upstream-*` 分支并创建**草稿 PR**，同时请求 OpenList 回归测试与打包检查。工作流不会自动合并到 `main`，测试通过和没有 Git 合并冲突也不能替代人工兼容性审查。审查时需检查 OpenList 下载器、合集入口、种子解析、配置、前端以及测试和同步工作流本身，确认最新 PR 提交的检查通过后，再手动将草稿转为可审查状态并合并。合并后的 Release 和 Docker 镜像通过手动运行 `build` 发布。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。
 
-自动创建同步 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。Copilot 批准功能需要在 Settings → Copilot → Code review 中开启 **Allow Copilot to approve pull requests**。如果 Copilot 无法批准，PR 会保留，自动合并不会绕过审查。
+自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。该变量只控制上游同步分支和 PR 的准备，不会启用自动合并。设为 `false` 可以停止准备新的上游更新。
 
 OpenList 没有通用的做种比率、上传限速与全局 Tracker API；这些 qBittorrent 功能无法在 OpenList 后端等价实现。上游文档适用于通用功能，OpenList 的差异以本仓库记录为准。
 
