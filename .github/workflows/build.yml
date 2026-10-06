@@ -2,6 +2,12 @@ name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      replace_existing_release:
+        description: Update the existing version tag and assets after a successful build
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -25,17 +31,20 @@ jobs:
       - name: Verify OpenList compatibility
         run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
+        env:
+          REPLACE_EXISTING_RELEASE: ${{ inputs.replace_existing_release }}
         run: |
           set -euo pipefail
           bash ./package.sh
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f pom.xml)
           release_tag="v${version}-openlist"
           existing_sha=$(git ls-remote --tags origin "refs/tags/${release_tag}" | awk 'NR == 1 {print $1}')
-          if [ -n "$existing_sha" ] && [ "$existing_sha" != "$GITHUB_SHA" ]; then
+          if [ -n "$existing_sha" ] && [ "$existing_sha" != "$GITHUB_SHA" ] && [ "$REPLACE_EXISTING_RELEASE" != true ]; then
             echo "::error::Tag ${release_tag} already points to ${existing_sha}; refusing to replace a release with artifacts from ${GITHUB_SHA}"
             exit 1
           fi
           echo "release_tag=${release_tag}" >> "$GITHUB_ENV"
+          echo "existing_release_sha=${existing_sha}" >> "$GITHUB_ENV"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
@@ -70,6 +79,19 @@ jobs:
             ghcr.io/kkkkeybird/ani-rss-openlist:${{ env.release_tag }}-openj9
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Update existing release tag after successful image builds
+        if: inputs.replace_existing_release && env.existing_release_sha != '' && env.existing_release_sha != github.sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_tag}" --jq '.object.sha')
+          if [ "$current_sha" != "$existing_release_sha" ]; then
+            echo "::error::Release tag changed during this build; refusing to replace it"
+            exit 1
+          fi
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${release_tag}" \
+            -f sha="$GITHUB_SHA" -F force=true
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
@@ -78,10 +100,13 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: false
           make_latest: true
+          overwrite_files: true
           body: |
             社区维护的 ANI-RSS OpenList fork，基于上游代码维护原生 OpenList 下载器。
 
-            源码与使用限制请见仓库 README 和 docs/openlist-compat-evaluation.md。
+            本版本新增 OpenList 合集下载：按预览筛选、逐集及字幕重命名、云端归档、冲突保护与重启恢复。OpenList 会下载完整种子，排除规则仅影响最终归档。
+
+            上游自动同步已停止，后续仅按所有者要求手动更新。源码与使用限制请见仓库 README 和 docs/openlist-compat-evaluation.md。
             目前尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
           files: |
             ./ani-rss-application/target/ani-rss.jar
