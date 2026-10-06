@@ -32,13 +32,13 @@
 
 手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 Release 固定使用 `v上游版本-openlist`（例如 `v3.2.40-openlist`），应用版本仍为上游 `3.2.40`，不生成 `r1`、构建计数或额外版本数字。已发布版本的标签不会被覆盖；若同一上游版本已有发布，则保留它并等待下一个上游版本。
 
-仓库维护以下工作流：`build.yml` 发布镜像和 Release，`openlist-check.yml` 执行回归测试及完整构建，`upstream-sync.yml` 准备上游同步 PR，`codex-cloud-sync.yml` 每 30 分钟协调云端审查与修复，并在审查及独立验证通过后合并。
+仓库维护以下工作流：`build.yml` 发布镜像和 Release，`openlist-check.yml` 执行回归测试及完整构建，`upstream-sync.yml` 准备上游同步 PR，云端触发任务已暂停以避免空轮询消耗额度；仅在确有上游同步需要时通过已授权的 GitHub 账户发起 Codex Cloud 修复，`codex-cloud-sync.yml` 每 30 分钟检查云端结果，并在独立验证通过后合并。
 
 仓库每 6 小时检查一次上游正式 Release（不含预发布），按发布时间逐个合并到 `sync/upstream-*` 分支并创建草稿 PR，同时请求 OpenList 回归测试与打包检查。GitHub 工作流不会仅凭测试通过就合并；Codex 云端任务负责审查上游差异，修复冲突及兼容性问题并提交到 PR 分支。Codex 检查最新提交、运行回归和打包验证、确认没有待修复问题且基线为最新 `main` 后，会将草稿转为就绪并合并对应的已验证提交，不需要人工审查。未解决的错误、无法完成的验证或权限问题会阻止合并并报告原因。
 
 **首要约束是保证所有 OpenList 相关功能可用。** 上游改动与本 fork 冲突时，优先保留或修复 OpenList，无法确认兼容时不能合并。自动审查重点是 OpenList 下载器、合集筛选与逐文件归档、重启恢复、种子解析、配置、前端以及测试和同步工作流本身。测试必须保留并随行为变化补充，不能通过移除测试掩盖回归。跟踪的上游版本记录在 [`.github/upstream-release.txt`](.github/upstream-release.txt)。Codex 审查和独立验证通过并合并上游 PR 后，会触发 `build` 发布该上游版本的 Release 与 Docker 镜像；也可手动运行 `build`。
 
-自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。设为 `false` 可以停止准备新的上游更新。Codex 自动审查与修复使用 GitHub 上的 `@codex` 云端集成，需要在 Codex 设置中连接本仓库并启用代码审查；不使用本地定时任务。协调工作流只接受官方 `chatgpt-codex-connector[bot]` 返回的明确结果，要求审查覆盖最新 PR 提交和当前 `main`，无剩余问题且独立验证成功才会合并；普通评论和旧提交审查结果不算批准。原生 Codex Cloud 的实际模型由服务选择，本流程不强行固定模型或推理强度。原生云端审查连接已验证，云端修复任务的结构化结果及完整自动合并链路还需要首个实际同步 PR 验证。
+自动创建同步草稿 PR 需要在仓库 Settings → Actions → General → Workflow permissions 中开启 **Allow GitHub Actions to create and approve pull requests**，并把仓库变量 `UPSTREAM_SYNC_ENABLED` 设为 `true`。设为 `false` 可以停止准备新的上游更新。Codex 自动审查与修复使用 GitHub 上的 `@codex` 云端集成，需要在 Codex 设置中连接本仓库、启用代码审查并配置 `ANI-RSS OpenList maintenance` 环境；通过云端 Scheduled 中的 `ANI-RSS OpenList 云端维护` 任务发起，不使用本地定时任务。原生云端不会响应 Actions 机器人的任务请求，因此工作流不自行评论触发。协调工作流只接受已授权 `KKKKeybird` 请求所对应的官方 `chatgpt-codex-connector[bot]` 明确结果，要求审查覆盖最新 PR 提交和当前 `main`，无剩余问题且独立验证成功才会合并；普通评论和旧提交审查结果不算批准。原生 Codex Cloud 的实际模型由服务选择，本流程不强行固定模型或推理强度。原生云端审查连接已验证，修复环境的证书配置已修正；完整自动修复和结果回传链路尚未验证，不会因为配置已保存就认为已经可用。当前不会无任务反复唤醒 AI。
 
 OpenList 没有通用的做种比率、上传限速与全局 Tracker API；这些 qBittorrent 功能无法在 OpenList 后端等价实现。上游文档适用于通用功能，OpenList 的差异以本仓库记录为准。
 

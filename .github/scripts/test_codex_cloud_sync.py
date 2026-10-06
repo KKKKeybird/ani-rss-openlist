@@ -53,18 +53,12 @@ class CloudApprovalTests(unittest.TestCase):
         comment['created_at'] = '2026-10-06T00:59:59Z'
         self.assertIsNone(self.approve(comment))
 
-    def test_request_must_originate_from_workflow(self):
+    def test_request_must_originate_from_authorized_cloud_account(self):
         body = sync.REQUEST + json.dumps(dict(id='id', head='head', base='base')) + ' -->'
         self.assertIsNone(sync.parse_request(dict(user={'login': 'contributor'}, body=body)))
-        self.assertIsNotNone(sync.parse_request(dict(user={'login': 'github-actions[bot]'}, body=body)))
+        self.assertIsNone(sync.parse_request(dict(user={'login': 'github-actions[bot]'}, body=body)))
+        self.assertIsNotNone(sync.parse_request(dict(user={'login': 'KKKKeybird'}, body=body)))
 
-    def test_cloud_task_prioritizes_openlist_and_does_not_authorize_agent_merge(self):
-        with patch.object(sync, 'api') as api:
-            sync.request_task('KKKKeybird/ani-rss-openlist', 2, 'head', 'base')
-            body = api.call_args.args[-1]
-            self.assertIn('FIRST PRIORITY', body)
-            self.assertIn('never disable or remove OpenList features', body)
-            self.assertIn('Do not merge or publish releases yourself', body)
 
 
 if __name__ == '__main__':
@@ -77,7 +71,7 @@ class CoordinatorTests(CloudApprovalTests):
                   head={'sha': 'head-1', 'ref': 'sync/upstream-v3.2.40', 'repo': {'full_name': repo}},
                   labels=[{'name': 'upstream-sync'}], draft=True, mergeable=True)
         request = dict(id='request-1', head='head-1', base='base-1')
-        request_comment = dict(user={'login': 'github-actions[bot]'}, created_at='2026-10-06T01:00:00Z',
+        request_comment = dict(user={'login': 'KKKKeybird'}, created_at='2026-10-06T01:00:00Z',
                                body=sync.REQUEST + json.dumps(request) + ' -->')
         pulls_calls = 0
         def response(_repo, path, *args):
@@ -95,14 +89,16 @@ class CoordinatorTests(CloudApprovalTests):
                 default = dict(id=1, head_sha='head-1', head_branch=pr['head']['ref'],
                                event='workflow_dispatch', status='completed', conclusion='success')
                 return {'workflow_runs': [default] if runs is None else runs}
+            if path == 'issues/2/comments':
+                return {'id': 42}
             if path == 'pulls/2/merge':
                 return {'merged': True, 'sha': 'merge-sha'}
             raise AssertionError(path)
         with patch.object(sync, 'api', side_effect=response) as api, \
              patch.object(sync, 'pages', return_value=[request_comment] + (comments or [self.comment()])), \
-             patch.object(sync, 'gh') as gh, patch.object(sync, 'request_task') as task:
+             patch.object(sync, 'gh') as gh:
             sync.process(repo, 2)
-            return api.call_args_list, gh.call_args_list, task.call_args_list
+            return api.call_args_list, gh.call_args_list, []
 
     def test_merge_uses_exact_reviewed_head_after_independent_verification(self):
         calls, commands, _ = self.run_process()
@@ -118,14 +114,14 @@ class CoordinatorTests(CloudApprovalTests):
             calls, _, _ = self.run_process(runs=runs)
             self.assertFalse(any(call.args[1] == 'pulls/2/merge' for call in calls))
 
-    def test_latest_failed_ci_requests_cloud_repair_instead_of_merging(self):
+    def test_latest_failed_ci_flags_cloud_repair_instead_of_merging(self):
         runs = [dict(id=2, head_sha='head-1', head_branch='sync/upstream-v3.2.40',
-                     event='workflow_dispatch', status='completed', conclusion='failure', updated_at='2026-10-06T01:00:02Z'),
+                     event='workflow_dispatch', status='completed', conclusion='failure', updated_at='2026-10-06T01:00:02Z', html_url='https://github.com/run/2'),
                 dict(id=1, head_sha='head-1', head_branch='sync/upstream-v3.2.40',
                      event='workflow_dispatch', status='completed', conclusion='success')]
         calls, _, tasks = self.run_process(runs=runs)
         self.assertFalse(any(call.args[1] == 'pulls/2/merge' for call in calls))
-        self.assertEqual(1, len(tasks))
+        self.assertTrue(any(call.args[1] == 'issues/2/comments' for call in calls))
 
     def test_changed_head_or_old_base_blocks_merge(self):
         for fields in [dict(changed_head=True), dict(base_current=False)]:
