@@ -28,7 +28,7 @@
 
 这是基于 [ANI-RSS 上游项目](https://github.com/wushuo894/ani-rss) 的社区维护 fork。这里的 `main` 持续维护原生 OpenList 下载器，供需要 OpenList 的用户跟踪和贡献；它不是上游官方发布版本。
 
-当前实现支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动和待验证事项见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。代码尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
+当前基于上游 `v3.2.43`，支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 Release 标签固定跟随上游版本并加 `-openlist`，例如 `v3.2.40-openlist`，应用版本仍为 `3.2.40`，不生成额外修订号或构建计数。默认不覆盖已有版本标签；明确要求更新同一版本时，可手动运行 `build` 并开启 `replace_existing_release`，在构建和镜像推送成功后更新同名标签及 Release 附件。
 
@@ -132,5 +132,4 @@ SharonNetworks 为您的业务起飞保驾护航！
 [NodeSupport](https://github.com/NodeSeekDev/NodeSupport) 赞助了本项目
 
 [![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source-sm.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
-
 
