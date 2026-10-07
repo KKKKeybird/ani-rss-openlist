@@ -1,6 +1,6 @@
 # 项目结构与下载流程
 
-本次整理基于 `main` 的应用版本 `3.2.39`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。
+本次整理基于 `main` 的应用版本 `3.2.43`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 ## 模块
 
@@ -35,9 +35,9 @@ OpenList 的通用离线 API 没有种子内文件优先级，排除规则只控
 
 ```sh
 mvn -B -pl ani-rss-application -am \
-  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest \
+  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 mvn -B -pl ani-rss-application -am -DskipTests package
 ```
 
-回归覆盖任务记录持久化、API 方法与错误处理、后台移动等待、合集多集及字幕归档、路径匹配、冲突与缺失文件、中断恢复。真实 Driver 的下载及云端转存时序需要用测试实例单独验证。
+回归覆盖任务记录持久化、API 方法与错误处理、后台移动等待、合集多集及字幕归档、路径匹配、冲突与缺失文件、中断恢复，以及上游配置默认值和种子保存路径兼容。

@@ -29,7 +29,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Verify OpenList compatibility
-        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
         env:
           REPLACE_EXISTING_RELEASE: ${{ inputs.replace_existing_release }}
@@ -104,10 +104,10 @@ jobs:
           body: |
             社区维护的 ANI-RSS OpenList fork，基于上游代码维护原生 OpenList 下载器。
 
-            本版本新增 OpenList 合集下载：按预览筛选、逐集及字幕重命名、云端归档、冲突保护与重启恢复。OpenList 会下载完整种子，排除规则仅影响最终归档。
+            本版本同步上游 v3.2.43，保留 OpenList 合集下载、任务持久化、云端归档、冲突保护与重启恢复。同步上游半集刮削与自动偏移修复、界面优化及依赖更新。OpenList 会下载完整种子，排除规则仅影响最终归档。
 
             上游自动同步已停止，后续仅按所有者要求手动更新。源码与使用限制请见仓库 README 和 docs/openlist-compat-evaluation.md。
-            目前尚未在真实 OpenList Driver 上完成端到端验证，请先在测试环境使用。
+            维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
           files: |
             ./ani-rss-application/target/ani-rss.jar
             ./ani-rss-application/target/ani-rss.exe

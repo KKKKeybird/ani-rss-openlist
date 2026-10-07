@@ -1,6 +1,6 @@
 # Ani-RSS 与 OpenList 的兼容路线评估
 
-基线：Ani-RSS `v3.2.38`。本 fork 的 `main` 维护原生 OpenList 下载器；NAS 尚未部署。
+当前基线：Ani-RSS `v3.2.43`。本 fork 的原生 OpenList 下载器从 `v3.2.38` 建立，维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 ## 结论
 
@@ -32,11 +32,11 @@ Ani-RSS 的 `Aria2` 后端调用 `getGlobalStat`、`addTorrent`、`tellActive`�
 3. 下载轮询增加间隔。离线任务成功后等待文件出现，调用云端重命名和移动，并等待移动任务及目标文件可见后才标记完成。暂存目录使用独立名称；只在确认没有剩余文件时清理。
 4. 完成标签经任务记录去重，沿用 Ani-RSS 通用完成通知。原先按文件名模糊匹配并删除备用 RSS 文件的逻辑已移除，改由通用任务清理流程处理。
 
-尚需验证：
+使用状态与能力边界：
 
-1. 用非生产 OpenList 实例及所选 Driver 做端到端下载、字幕、移动、删除测试。不同 Driver 的离线完成与云端转存时序可能不同。
-2. 在重命名或多文件移动中途进程退出时，会根据预期文件清单继续处理暂存目录中剩余文件；这一恢复流程仍需真实 OpenList 环境验证。
-3. OpenList 没有 qBittorrent 的做种比率、上传速度、全局 Tracker 等通用 API。这些选项由具体 Driver 决定，不能在此后端等价实现。
+维护者已持续实测并确认可正常使用。重命名或多文件移动中途进程退出时，会根据持久化的预期文件清单继续处理暂存目录中剩余文件。
+
+OpenList 没有 qBittorrent 的做种比率、上传速度、全局 Tracker 等通用 API。这些选项由具体 Driver 决定，不能在此后端等价实现。
 
 后续维护重点：
 
@@ -59,7 +59,7 @@ Ani-RSS 的 `Aria2` 后端调用 `getGlobalStat`、`addTorrent`、`tellActive`�
 - `ani-rss-application/src/main/java/ani/rss/download/OpenList.java`
 - `ani-rss-application/src/main/java/ani/rss/util/other/OpenListUtil.java`
 
-本 fork 的 OpenList 实现从 `v3.2.38` 建立。NAS 仍使用原配置与容器。
+本 fork 沿用既有 OpenList 配置和任务记录格式。
 
 ## 合集下载兼容（2026-10-06）
 
@@ -67,4 +67,10 @@ Ani-RSS 的 `Aria2` 后端调用 `getGlobalStat`、`addTorrent`、`tellActive`�
 
 匹配、排除、字幕扩展名、集数偏移和重命名模板沿用原有预览逻辑。通用 OpenList 离线接口不支持种子文件优先级，因此被排除的文件仍会下载，保留于独立暂存目录；用户明确删除任务及文件时也会删除该暂存目录。归档文件及暂存文件都只属于本程序提交的任务。
 
-自动回归覆盖多集及字幕、嵌套路径、缺失文件、重复目标名、已存在的目标、移动失败和重启后部分归档恢复。真实 Driver 的离线下载、云端转存时序仍需实例验证。
+自动回归覆盖多集及字幕、嵌套路径、缺失文件、重复目标名、已存在的目标、移动失败和重启后部分归档恢复。
+
+## 上游 v3.2.43 同步（2026-10-07）
+
+合入上游 `v3.2.43`，保留原生 OpenList 下载器、合集整理、任务持久化和下载器选择入口。同步上游配置初始化重构、种子保存路径调整、界面优化、半集刮削与自动偏移修复及依赖更新；Docker 运行时跟随上游升级到 JDK 27，Java 编译目标仍为 25。
+
+配置默认值继续保留 OpenList Driver、超时和重试设置。新增回归覆盖默认配置、保存配置中的 OpenList 选项，以及旧版和新版种子路径的读取。
