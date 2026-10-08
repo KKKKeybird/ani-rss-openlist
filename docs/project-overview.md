@@ -1,6 +1,6 @@
 # 项目结构与下载流程
 
-本次整理基于 `main` 的应用版本 `3.2.43`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+本次整理基于 `main` 的应用版本 `3.2.44`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 ## 模块
 
@@ -35,13 +35,17 @@ OpenList：先检查预览 → 提交整包离线任务到独立暂存目录 →
 
 OpenList 的通用离线 API 没有种子内文件优先级，排除规则只控制归档，排除文件留在暂存目录。空预览、重复目标名、源文件缺失/不唯一、已有目标均不会覆盖归档文件。
 
+## WebUI 任务清理
+
+下载页按下载中、已完成、失败分组，支持单任务删除和失败任务批量清理。经鉴权的 `deleteDownloadTasks` 接口按服务端任务列表解析 ID（无 ID 时使用 hash），始终保留文件，并分别返回成功和失败的任务标识。批量清理会重新检查失败状态。OpenList 删除通过已完成及未完成任务列表确认远端是否存在；终态任务直接删除记录，活动任务先取消，远端已不存在时清理本地持久记录，接口失败则保留记录。删除中的普通下载线程发出取消信号，避免当前下载重试重新提交。
+
 ## 验证
 
 ```sh
 mvn -B -pl ani-rss-application -am \
-  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest \
+  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 mvn -B -pl ani-rss-application -am -DskipTests package
 ```
 
-回归覆盖任务记录持久化、API 方法与错误处理、后台移动等待、合集多集及字幕归档、路径匹配、冲突与缺失文件、中断恢复，以及上游配置默认值和种子保存路径兼容。
+回归覆盖任务记录持久化、API 方法与错误处理、后台移动等待、合集多集及字幕归档、路径匹配、冲突与缺失文件、中断恢复、失效任务清理及删除失败保护、删除时中止当前下载，以及 qBittorrent 保留文件删除和上游配置兼容。

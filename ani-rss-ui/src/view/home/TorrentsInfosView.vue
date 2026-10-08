@@ -17,8 +17,17 @@
                 <el-tag size="small" type="success">{{ completedInfos.length }}</el-tag>
               </template>
             </el-tab-pane>
+            <el-tab-pane name="failed">
+              <template #label>
+                <span class="tab-label">失败</span>
+                <el-tag size="small" type="danger">{{ failedInfos.length }}</el-tag>
+              </template>
+            </el-tab-pane>
           </el-tabs>
           <div class="sort-actions">
+            <el-button v-if="activeTab === 'failed'" type="danger" plain
+                       :disabled="!failedInfos.length || deleting" :loading="deleting"
+                       @click="clearFailedTasks">清理失败任务</el-button>
             <el-dropdown trigger="click" @command="changeSortType">
               <el-button class="sort-field-button">
                 <el-icon>
@@ -77,6 +86,8 @@
                 <el-tag type="primary">
                   {{ torrentsInfo['state'] }}
                 </el-tag>
+                <el-button class="delete-task-button" type="danger" plain size="small"
+                           :disabled="deleting" @click="deleteTask(torrentsInfo)">删除任务</el-button>
               </div>
             </div>
           </el-card>
@@ -92,6 +103,7 @@ import * as http from "@/js/http.js";
 import {ArrowDown, Check, Sort, SortDown, SortUp} from "@element-plus/icons-vue";
 import {formatSize} from "@/js/format.js";
 import PageHeaderView from "@/view/custom/PageHeaderView.vue";
+import {ElMessage, ElMessageBox} from "element-plus";
 
 const activeTab = ref('downloading')
 // 记录排序方式
@@ -120,11 +132,16 @@ let polling = false
 let stopped = false
 
 let torrentsInfos = ref([])
+const deleting = ref(false)
+let listRequest = 0
 
 const completedInfos = computed(() => torrentsInfos.value.filter(isCompleted))
-const downloadingInfos = computed(() => torrentsInfos.value.filter(item => !isCompleted(item)))
-const activeTorrentsInfos = computed(() => activeTab.value === 'completed' ? completedInfos.value : downloadingInfos.value)
-const emptyDescription = computed(() => activeTab.value === 'completed' ? '当前无已完成任务' : '当前无下载中任务')
+const failedInfos = computed(() => torrentsInfos.value.filter(item => item.state === 'error'))
+const downloadingInfos = computed(() => torrentsInfos.value.filter(item => !isCompleted(item) && item.state !== 'error'))
+const activeTorrentsInfos = computed(() => activeTab.value === 'completed' ? completedInfos.value
+    : activeTab.value === 'failed' ? failedInfos.value : downloadingInfos.value)
+const emptyDescription = computed(() => activeTab.value === 'completed' ? '当前无已完成任务'
+    : activeTab.value === 'failed' ? '当前无失败任务' : '当前无下载中任务')
 const currentSortLabel = computed(() => sortTypeList.find(item => item.value === sortType.value)?.label || '名称')
 
 const isCompleted = item => {
@@ -169,6 +186,49 @@ let sortInfos = (infos) => {
   return infos;
 }
 
+const loadTasks = async () => {
+  const request = ++listRequest
+  const res = await http.torrentsInfos()
+  if (request === listRequest) {
+    torrentsInfos.value = sortInfos(res.data)
+  }
+}
+
+const removeTasks = async (ids, failedOnly, message) => {
+  if (deleting.value) return
+  deleting.value = true
+  try {
+    await ElMessageBox.confirm(message, '删除下载任务', {
+      type: 'warning', confirmButtonText: '删除任务', cancelButtonText: '取消'
+    })
+    const res = await http.deleteDownloadTasks(ids, failedOnly)
+    ++listRequest // Ignore a poll response started before deletion completed.
+    const {deleted, failed} = res.data
+    torrentsInfos.value = torrentsInfos.value.filter(item => !deleted.includes(taskKey(item)))
+    if (failed.length) {
+      ElMessage.warning(`已清理 ${deleted.length} 个任务，${failed.length} 个任务未删除，请刷新后重试`)
+    } else {
+      ElMessage.success(`已删除 ${deleted.length} 个任务，已下载文件保留`)
+    }
+    await loadTasks()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      // API errors are displayed by the shared HTTP client.
+      console.warn('删除下载任务未完成', error)
+    }
+  } finally {
+    deleting.value = false
+  }
+}
+
+const taskKey = item => item.id || item.hash
+
+const deleteTask = item => removeTasks([taskKey(item)], false,
+    `删除任务“${item.name}”？正在运行的任务会停止，已下载文件和暂存文件保留。`)
+
+const clearFailedTasks = () => removeTasks(failedInfos.value.map(taskKey), true,
+    `清理当前 ${failedInfos.value.length} 个失败任务？已下载文件和暂存文件保留；已恢复下载的任务会跳过。`)
+
 let startPolling = async () => {
   if (polling) {
     return
@@ -176,9 +236,7 @@ let startPolling = async () => {
   polling = true
   while (!stopped) {
     try {
-      let res = await http.torrentsInfos()
-      let infos = await res.data
-      torrentsInfos.value = sortInfos(infos)
+      await loadTasks()
     } catch (_) {
     }
     await sleep(3000)
@@ -298,6 +356,10 @@ onUnmounted(pausePolling)
   justify-content: space-between;
 }
 
+.delete-task-button {
+  margin-left: 8px;
+}
+
 .torrents-tags {
   display: flex;
   flex-wrap: wrap;
@@ -305,7 +367,16 @@ onUnmounted(pausePolling)
 }
 
 @media (max-width: 700px) {
+  .torrents-tabs {
+    flex: 1 0 100%;
+  }
+
+  .sort-actions {
+    margin-left: auto;
+  }
+
   .torrents-toolbar {
+    flex-wrap: wrap;
     align-items: flex-end;
     gap: 6px;
     padding: 0 0 8px;

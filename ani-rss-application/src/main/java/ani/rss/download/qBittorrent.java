@@ -247,6 +247,9 @@ public class qBittorrent implements BaseDownload {
             if (!b) {
                 return false;
             }
+            if (!deleteFiles) {
+                return true;
+            }
 
             // 剧场版不用进行残留的文件夹清理
             if (!ReUtil.contains(StringEnum.SEASON_REG, name)) {

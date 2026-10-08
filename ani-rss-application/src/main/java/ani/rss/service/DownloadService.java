@@ -398,6 +398,9 @@ public class DownloadService {
                 if (TorrentUtil.download(ani, item, savePath, torrentFile)) {
                     return;
                 }
+            } catch (java.util.concurrent.CancellationException e) {
+                log.info("下载任务已被用户删除 {}", name);
+                return;
             } catch (Exception e) {
                 String message = ExceptionUtils.getMessage(e);
                 log.error(message, e);

@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -42,6 +44,7 @@ public class OpenList implements BaseDownload {
     });
     private final OpenListTaskStore taskStore = new OpenListTaskStore(
             new File(ConfigUtil.getConfigDir(), "cache/openlist-tasks.json"));
+    private final Set<String> deletingTasks = ConcurrentHashMap.newKeySet();
 
     @Override
     public Boolean login(Boolean test, Config config) {
@@ -66,7 +69,7 @@ public class OpenList implements BaseDownload {
 
 
     @Override
-    public List<TorrentsInfo> getTorrentsInfos() {
+    public synchronized List<TorrentsInfo> getTorrentsInfos() {
         List<TorrentsInfo> result = new ArrayList<>();
         for (OpenListTaskStore.Task task : taskStore.list()) {
             String taskId = task.getId();
@@ -81,7 +84,11 @@ public class OpenList implements BaseDownload {
             if (!completed) {
                 openListUtil.taskInfo(taskId).ifPresent(info -> {
                     taskStore.progress(taskId, info);
-                    if (!taskStore.get(taskId).getCollectionFiles().isEmpty()) {
+                    var recorded = taskStore.get(taskId);
+                    if (recorded == null) {
+                        return;
+                    }
+                    if (!recorded.getCollectionFiles().isEmpty()) {
                         reconcileCollection(taskId, info);
                     } else if (info.getState() == OpenListTaskInfo.State.Succeeded) {
                         try {
@@ -92,6 +99,9 @@ public class OpenList implements BaseDownload {
                     }
                 });
                 var current = taskStore.get(taskId);
+                if (current == null) {
+                    continue;
+                }
                 if (!current.getCollectionFiles().isEmpty() && !current.isCompleted()
                         && !OpenListTaskInfo.State.Succeeded.name().equals(current.getState())
                         && System.currentTimeMillis() >= current.getSubmittedAt()
@@ -99,7 +109,11 @@ public class OpenList implements BaseDownload {
                     taskStore.failed(taskId, "合集下载超时");
                 }
             }
-            if (taskStore.get(taskId).isCompleted()) {
+            task = taskStore.get(taskId);
+            if (task == null) {
+                continue;
+            }
+            if (task.isCompleted()) {
                 try {
                     new OpenListStagingCleaner(openListUtil, taskStore).cleanIfEmpty(taskId);
                 } catch (Exception e) {
@@ -107,6 +121,9 @@ public class OpenList implements BaseDownload {
                 }
             }
             task = taskStore.get(task.getId());
+            if (task == null) {
+                continue;
+            }
             long size = task.getSize();
             long completedBytes = task.isCompleted() ? size : size * task.getProgress() / 100;
             List<String> taskFiles = List.copyOf(task.getFiles());
@@ -219,8 +236,8 @@ public class OpenList implements BaseDownload {
             long retry = 0;
             while (true) {
                 var current = taskStore.get(tid);
-                if (current == null) {
-                    return false;
+                if (current == null || deletingTasks.contains(tid)) {
+                    throw new CancellationException("OpenList 下载任务已被删除");
                 }
                 if (current.isCompleted()) {
                     return true;
@@ -231,7 +248,7 @@ public class OpenList implements BaseDownload {
                     // 超过下载超时限制
                     log.error("{} {} 分钟还未下载完成, 停止检测下载", reName, CONFIG.getOpenListDownloadTimeout());
                     taskStore.failed(tid, "下载超时");
-                    return false;
+                    return downloadFailed(tid);
                 }
 
                 Optional<OpenListTaskInfo> taskInfoOpt = openListUtil.taskInfo(tid);
@@ -272,12 +289,12 @@ public class OpenList implements BaseDownload {
                             }
                             log.error("离线下载失败 {}", error);
                             taskStore.failed(tid, error);
-                            return false;
+                            return downloadFailed(tid);
                         }
                         retry++;
                         log.info("离线任务正在进行重试 {}, 当前重试次数 {}, 最大重试次数 {}", tid, retry, openListDownloadRetryNumber);
                     }
-                    Assert.isTrue(openListUtil.taskRetry(tid), "OpenList 重试失败: {}", tid);
+                    Assert.isTrue(retryDownload(tid), "OpenList 重试失败: {}", tid);
                     ThreadUtil.sleep(2000);
                     continue;
                 }
@@ -290,7 +307,7 @@ public class OpenList implements BaseDownload {
                 ) {
                     log.error("离线任务已被取消 {}", reName);
                     taskStore.failed(tid, "任务已取消");
-                    return false;
+                    return downloadFailed(tid);
                 }
 
                 // 成功
@@ -300,14 +317,30 @@ public class OpenList implements BaseDownload {
                 ThreadUtil.sleep(2000);
             }
 
-            return finishTask(tid, deadline);
+            boolean finished = finishTask(tid, deadline);
+            return finished || downloadFailed(tid);
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
+            downloadFailed(tid);
             if (tid != null) {
                 taskStore.failed(tid, e.getMessage());
             }
             log.error(e.getMessage(), e);
         }
         return false;
+    }
+
+    private boolean downloadFailed(String tid) {
+        if (tid != null && (deletingTasks.contains(tid) || taskStore.get(tid) == null)) {
+            throw new CancellationException("OpenList 下载任务已被删除");
+        }
+        return false;
+    }
+
+    private synchronized boolean retryDownload(String tid) {
+        downloadFailed(tid);
+        return openListUtil.taskRetry(tid);
     }
 
     private synchronized Boolean finishTask(String tid, long deadline) {
@@ -401,7 +434,16 @@ public class OpenList implements BaseDownload {
     }
 
     @Override
-    public Boolean delete(TorrentsInfo torrentsInfo, Boolean deleteFiles) {
+    public synchronized Boolean delete(TorrentsInfo torrentsInfo, Boolean deleteFiles) {
+        if (!deleteFiles) {
+            String id = torrentsInfo.getId();
+            deletingTasks.add(id);
+            try {
+                return new OpenListTaskDeletion(openListUtil, taskStore).delete(id);
+            } finally {
+                deletingTasks.remove(id);
+            }
+        }
         OpenListTaskStore.Task task = taskStore.get(torrentsInfo.getId());
         if (task == null) {
             return false;

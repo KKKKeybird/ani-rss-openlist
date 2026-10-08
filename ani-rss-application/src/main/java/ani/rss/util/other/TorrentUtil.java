@@ -44,6 +44,10 @@ public class TorrentUtil {
         return new ArrayList<>(DOWNLOAD.getTorrentsInfos());
     }
 
+    public static ani.rss.service.DownloadTaskDeletion.Outcome deleteTasks(List<String> ids, boolean failedOnly) {
+        return ani.rss.service.DownloadTaskDeletion.delete(DOWNLOAD, ids, failedOnly);
+    }
+
     /**
      * 获取种子存放文件夹
      *

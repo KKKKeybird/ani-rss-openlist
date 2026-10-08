@@ -186,6 +186,10 @@ export let testProxy = (url, config) => api.post(`api/testProxy?url=${url}`, con
  */
 export let torrentsInfos = () => api.post('api/torrentsInfos')
 
+/** Remove download tasks while retaining their files. */
+export let deleteDownloadTasks = (ids, failedOnly = false) =>
+    api.post(`api/deleteDownloadTasks?failedOnly=${failedOnly}`, ids)
+
 /**
  * 订单号校验
  * @param config 设置
