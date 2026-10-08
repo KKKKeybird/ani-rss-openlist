@@ -3,6 +3,11 @@ name: build
 on:
   workflow_dispatch:
     inputs:
+      release_revision:
+        description: Optional fork revision, for example r1 (application version stays unchanged)
+        type: string
+        required: false
+        default: ''
       replace_existing_release:
         description: Update the existing version tag and assets after a successful build
         type: boolean
@@ -33,17 +38,26 @@ jobs:
       - name: Build release artifacts
         env:
           REPLACE_EXISTING_RELEASE: ${{ inputs.replace_existing_release }}
+          RELEASE_REVISION: ${{ inputs.release_revision }}
         run: |
           set -euo pipefail
+          if [ -n "$RELEASE_REVISION" ] && ! [[ "$RELEASE_REVISION" =~ ^r[1-9][0-9]*$ ]]; then
+            echo "::error::Release revision must be empty or r followed by a positive integer, for example r1"
+            exit 1
+          fi
           bash ./package.sh
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f pom.xml)
           release_tag="v${version}-openlist"
+          if [ -n "$RELEASE_REVISION" ]; then
+            release_tag="${release_tag}-${RELEASE_REVISION}"
+          fi
           existing_sha=$(git ls-remote --tags origin "refs/tags/${release_tag}" | awk 'NR == 1 {print $1}')
           if [ -n "$existing_sha" ] && [ "$existing_sha" != "$GITHUB_SHA" ] && [ "$REPLACE_EXISTING_RELEASE" != true ]; then
             echo "::error::Tag ${release_tag} already points to ${existing_sha}; refusing to replace a release with artifacts from ${GITHUB_SHA}"
             exit 1
           fi
           echo "release_tag=${release_tag}" >> "$GITHUB_ENV"
+          echo "application_version=${version}" >> "$GITHUB_ENV"
           echo "existing_release_sha=${existing_sha}" >> "$GITHUB_ENV"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -104,7 +118,11 @@ jobs:
           body: |
             社区维护的 ANI-RSS OpenList fork，基于上游代码维护原生 OpenList 下载器。
 
-            本版本同步上游 v3.2.43，保留 OpenList 合集下载、任务持久化、云端归档、冲突保护与重启恢复。同步上游半集刮削与自动偏移修复、界面优化及依赖更新。OpenList 会下载完整种子，排除规则仅影响最终归档。
+            本版本基于上游 v${{ env.application_version }}，保留 OpenList 合集下载、任务持久化、云端归档、冲突保护与重启恢复。
+
+            修复 OpenList 已完成任务仍反复查询并报 task not found 的问题：优先核对已记录的目标文件，确认归档完成后持久化完成状态。新任务按文件名和大小核对，旧版普通任务按完整清单中的同名非空文件恢复。
+
+            统一清理已完成任务的空暂存目录，历史任务也会补做清理；有文件的目录保留，清理失败稍后重试。修复普通任务大小重复累加和完成状态被迟到的超时覆盖的问题。OpenList 会下载完整种子，排除规则仅影响最终归档。
 
             上游自动同步已停止，后续仅按所有者要求手动更新。源码与使用限制请见仓库 README 和 docs/openlist-compat-evaluation.md。
             维护者已持续在实际 OpenList 环境中测试，确认可正常使用。

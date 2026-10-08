@@ -30,7 +30,7 @@
 
 当前基于上游 `v3.2.43`，支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
-手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。 Release 标签固定跟随上游版本并加 `-openlist`，例如 `v3.2.40-openlist`，应用版本仍为 `3.2.40`，不生成额外修订号或构建计数。默认不覆盖已有版本标签；明确要求更新同一版本时，可手动运行 `build` 并开启 `replace_existing_release`，在构建和镜像推送成功后更新同名标签及 Release 附件。
+手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。默认 Release 标签跟随上游版本并加 `-openlist`，例如 `v3.2.43-openlist`。按维护者要求发布修订版时，可手动指定 `release_revision=r1`，生成 `v3.2.43-openlist-r1`，应用版本仍为 `3.2.43`；不自动生成修订号或构建计数。每次发布同时更新 `latest` 和 `openj9` 滚动标签。默认不覆盖已有版本标签；明确要求更新同一版本时，可手动运行 `build` 并开启 `replace_existing_release`，在构建和镜像推送成功后更新同名标签及 Release 附件。
 
 仓库保留 `build.yml` 手动发布镜像和 Release，以及 `openlist-check.yml` 执行回归测试和完整构建。
 
