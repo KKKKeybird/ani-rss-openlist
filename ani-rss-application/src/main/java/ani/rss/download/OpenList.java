@@ -70,7 +70,15 @@ public class OpenList implements BaseDownload {
         List<TorrentsInfo> result = new ArrayList<>();
         for (OpenListTaskStore.Task task : taskStore.list()) {
             String taskId = task.getId();
-            if (!task.isCompleted()) {
+            boolean completed = task.isCompleted();
+            if (!completed) {
+                try {
+                    completed = new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(taskId);
+                } catch (Exception e) {
+                    log.warn("OpenList 目标文件检查失败 {}: {}", taskId, e.getMessage());
+                }
+            }
+            if (!completed) {
                 openListUtil.taskInfo(taskId).ifPresent(info -> {
                     taskStore.progress(taskId, info);
                     if (!taskStore.get(taskId).getCollectionFiles().isEmpty()) {
@@ -91,9 +99,16 @@ public class OpenList implements BaseDownload {
                     taskStore.failed(taskId, "合集下载超时");
                 }
             }
+            if (taskStore.get(taskId).isCompleted()) {
+                try {
+                    new OpenListStagingCleaner(openListUtil, taskStore).cleanIfEmpty(taskId);
+                } catch (Exception e) {
+                    log.warn("OpenList 暂存目录清理待重试 {}: {}", taskId, e.getMessage());
+                }
+            }
             task = taskStore.get(task.getId());
             long size = task.getSize();
-            long completed = task.isCompleted() ? size : size * task.getProgress() / 100;
+            long completedBytes = task.isCompleted() ? size : size * task.getProgress() / 100;
             List<String> taskFiles = List.copyOf(task.getFiles());
             TorrentsInfo info = new TorrentsInfo()
                     .setId(task.getId()).setHash(task.getHash()).setName(task.getName())
@@ -104,7 +119,7 @@ public class OpenList implements BaseDownload {
                     .setTagList(List.copyOf(task.getTags()))
                     .setSavePath(task.getSavePath())
                     .setFilesSupplier(() -> taskFiles)
-                    .progress(completed, size);
+                    .progress(completedBytes, size);
             if (!task.isCompleted()) {
                 info.setProgress((double) task.getProgress());
             }
@@ -203,6 +218,13 @@ public class OpenList implements BaseDownload {
             // 重试次数
             long retry = 0;
             while (true) {
+                var current = taskStore.get(tid);
+                if (current == null) {
+                    return false;
+                }
+                if (current.isCompleted()) {
+                    return true;
+                }
                 Long openListDownloadRetryNumber = CONFIG.getOpenListDownloadRetryNumber();
 
                 if (System.currentTimeMillis() >= deadline) {
@@ -215,6 +237,9 @@ public class OpenList implements BaseDownload {
                 Optional<OpenListTaskInfo> taskInfoOpt = openListUtil.taskInfo(tid);
 
                 if (taskInfoOpt.isEmpty()) {
+                    if (new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(tid)) {
+                        return true;
+                    }
                     ThreadUtil.sleep(2000);
                     continue;
                 }
@@ -293,6 +318,9 @@ public class OpenList implements BaseDownload {
         if (task.isCompleted()) {
             return true;
         }
+        if (new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(tid)) {
+            return true;
+        }
         if (!task.getCollectionFiles().isEmpty()) {
             return new OpenListCollectionOrganizer(openListUtil, taskStore).finish(tid, deadline);
         }
@@ -301,12 +329,6 @@ public class OpenList implements BaseDownload {
         String reName = task.getName();
         Set<String> presentBefore = new HashSet<>(openListUtil.fsListChecked(savePath, true)
                 .stream().map(OpenListFileInfo::getName).toList());
-        if (!task.getFiles().isEmpty()) {
-            if (presentBefore.containsAll(task.getFiles())) {
-                taskStore.completed(tid, task.getFiles(), task.getSize());
-                return true;
-            }
-        }
             List<OpenListFileInfo> openListFileInfos;
             Optional<OpenListFileInfo> videoFileOpt;
             do {
@@ -338,7 +360,8 @@ public class OpenList implements BaseDownload {
             }
             Map<String, List<String>> moves = new LinkedHashMap<>();
             List<String> names = new ArrayList<>(task.getFiles());
-            long size = task.getSize();
+            long size = task.getFiles().isEmpty() ? 0 : task.getSize();
+            Map<String, Long> fileSizes = new LinkedHashMap<>(task.getFileSizes());
             for (OpenListFileInfo file : selected) {
                 String newName = CONFIG.getRename()
                         ? getFileReName(file.getName(), reName) : file.getName();
@@ -354,21 +377,21 @@ public class OpenList implements BaseDownload {
                 if (task.getFiles().isEmpty()) {
                     names.add(newName);
                     size += file.getSize() == null ? 0 : file.getSize();
+                    fileSizes.put(newName, file.getSize());
                 }
             }
             if (task.getFiles().isEmpty()) {
-                taskStore.planned(tid, names, size);
+                taskStore.planned(tid, names, size, fileSizes);
             }
             for (Map.Entry<String, List<String>> move : moves.entrySet()) {
                 openListUtil.fsMoveAndWait(move.getKey(), savePath, move.getValue(), deadline);
             }
             while (System.currentTimeMillis() < deadline) {
-                Set<String> present = new HashSet<>(openListUtil.fsListChecked(savePath, true)
-                        .stream().map(OpenListFileInfo::getName).toList());
-                if (present.containsAll(names)) {
-                    taskStore.completed(tid, names, size);
-                    if (openListUtil.findFiles(path).isEmpty()) {
-                        openListUtil.fsRemove(savePath, List.of(path.substring(savePath.length() + 1)));
+                if (new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(tid)) {
+                    try {
+                        new OpenListStagingCleaner(openListUtil, taskStore).cleanIfEmpty(tid);
+                    } catch (Exception e) {
+                        log.warn("OpenList 暂存目录清理待重试 {}: {}", tid, e.getMessage());
                     }
                     return true;
                 }

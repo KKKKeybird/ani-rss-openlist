@@ -21,6 +21,10 @@
 
 任务信息、标签和归档文件清单保存到配置目录的 `cache/openlist-tasks.json`。`OpenListUtil` 封装文件/任务 API，并检查 OpenList JSON 返回码和后台移动任务。`RenameTask` 周期调用任务查询、完成通知及配置允许的清理。
 
+已有持久化归档计划的任务会先通过 OpenList 文件 API 检查目标目录。所有记录的目标文件均存在且大小符合记录后，保存完成状态并停止查询离线任务，避免 OpenList 清理任务历史后反复报 `task not found`。普通下载新计划记录每个文件的大小；旧版普通任务没有可靠的单文件大小，只按完整归档清单核对同名非空文件并重新统计大小。没有归档计划时不按相似文件名猜测完成状态。
+
+完成任务统一检查自身记录的 `.ani-rss-openlist-<UUID>` 暂存目录，历史完成任务也会补做清理。递归确认没有任何文件后删除整个空目录树；排除文件或其他残留文件仍保留。清理使用原暂存路径，不受归档位置变更影响。清理结果持久化，非空目录或 API 失败最多每五分钟重查一次；清理失败不会回退下载完成状态。
+
 ## 合集下载
 
 前端 `CollectionView` → `CollectionController` → `CollectionService.preview`。预览从 `TorrentMetadata` 读取文件及大小，应用匹配/排除规则，再通过 `RenameUtil` 生成目标名，支持集数偏移和字幕语言扩展名。
@@ -35,7 +39,7 @@ OpenList 的通用离线 API 没有种子内文件优先级，排除规则只控
 
 ```sh
 mvn -B -pl ani-rss-application -am \
-  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest \
+  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 mvn -B -pl ani-rss-application -am -DskipTests package
 ```

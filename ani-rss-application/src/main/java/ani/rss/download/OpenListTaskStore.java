@@ -93,15 +93,20 @@ public class OpenListTaskStore {
     }
 
     public synchronized void planned(String id, List<String> files, long size) {
+        planned(id, files, size, Map.of());
+    }
+
+    public synchronized void planned(String id, List<String> files, long size, Map<String, Long> fileSizes) {
         Task task = require(id);
         task.setFiles(new ArrayList<>(files));
         task.setSize(size);
+        task.setFileSizes(new LinkedHashMap<>(fileSizes));
         save();
     }
 
     public synchronized void failed(String id, String reason) {
         Task task = tasks.get(id);
-        if (task == null) {
+        if (task == null || task.isCompleted()) {
             return;
         }
         task.setState(OpenListTaskInfo.State.Failed.name());
@@ -132,6 +137,13 @@ public class OpenListTaskStore {
         }
     }
 
+    public synchronized void stagingChecked(String id, long checkedAt, boolean cleaned) {
+        Task task = require(id);
+        task.setStagingCheckedAt(checkedAt);
+        task.setStagingCleaned(cleaned);
+        save();
+    }
+
     private Task require(String id) {
         Task task = tasks.get(id);
         if (task == null) {
@@ -154,12 +166,16 @@ public class OpenListTaskStore {
                 .setName(source.getName())
                 .setSavePath(source.getSavePath())
                 .setStagingPath(source.getStagingPath())
+                .setStagingCheckedAt(source.getStagingCheckedAt())
+                .setStagingCleaned(source.isStagingCleaned())
                 .setCollectionFiles(source.getCollectionFiles().stream().map(CollectionFile::copy).toList())
                 .setCollectionPlanned(source.isCollectionPlanned())
                 .setSubmittedAt(source.getSubmittedAt())
                 .setRetries(source.getRetries())
                 .setTags(new ArrayList<>(source.getTags()))
                 .setFiles(new ArrayList<>(source.getFiles()))
+                .setFileSizes(source.getFileSizes() == null ? new LinkedHashMap<>()
+                        : new LinkedHashMap<>(source.getFileSizes()))
                 .setSize(source.getSize())
                 .setProgress(source.getProgress())
                 .setState(source.getState())
@@ -204,8 +220,11 @@ public class OpenListTaskStore {
         private String name;
         private String savePath;
         private String stagingPath;
+        private long stagingCheckedAt;
+        private boolean stagingCleaned;
         private List<String> tags = new ArrayList<>();
         private List<String> files = new ArrayList<>();
+        private Map<String, Long> fileSizes = new LinkedHashMap<>();
         private List<CollectionFile> collectionFiles = new ArrayList<>();
         private boolean collectionPlanned;
         private long submittedAt;
