@@ -24,10 +24,14 @@ public class qBittorrentTorrentsInfo extends TorrentsInfo implements Serializabl
     @Schema(description = "标签")
     private String tags;
 
+    @com.google.gson.annotations.SerializedName("added_on")
+    private Long addedOn;
+
     public TorrentsInfo toTorrentsInfo() {
         // 将标签转换为 List
         List<String> tagList = StrUtil.split(tags, ",", true, true);
         setTagList(tagList);
+        if (addedOn != null && addedOn > 0) setStartTime(addedOn * 1000L);
 
         // 获取文件列表
         setFilesSupplier(() ->
