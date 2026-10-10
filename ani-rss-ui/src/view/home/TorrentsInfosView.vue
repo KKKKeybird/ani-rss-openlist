@@ -120,6 +120,18 @@ let sortTypeList = [
     }
   },
   {
+    label: "开始时间",
+    value: "startTime",
+    fun: (value) => value.sort((a, b) => {
+      const aTime = Number(a.startTime) || 0
+      const bTime = Number(b.startTime) || 0
+      if (!aTime && !bTime) return 0
+      if (!aTime) return 1
+      if (!bTime) return -1
+      return aTime - bTime
+    })
+  },
+  {
     label: "进度",
     value: "progress",
     fun: (value) => {
@@ -181,7 +193,13 @@ let sortInfos = (infos) => {
       continue
     }
     let sorted = fun([...infos])
-    return sortOrder.value === 'asc' ? sorted : sorted.reverse()
+    if (sortOrder.value === 'asc') return sorted
+    // Keep tasks with unknown start time at the end in both directions.
+    if (sortType.value === 'startTime') {
+      return sorted.filter(item => Number(item.startTime) > 0).reverse()
+          .concat(sorted.filter(item => !(Number(item.startTime) > 0)))
+    }
+    return sorted.reverse()
   }
   return infos;
 }

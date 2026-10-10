@@ -35,6 +35,10 @@ public class TorrentsInfo implements Serializable {
     @Schema(description = "名称")
     private String name;
 
+    /** Task start time in Unix milliseconds; null when unavailable. */
+    @Schema(description = "任务开始时间（毫秒时间戳）")
+    private Long startTime;
+
     /**
      * 状态
      */
