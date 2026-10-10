@@ -120,6 +120,31 @@ class OpenListStagingCleanerTest {
     }
 
     @Test
+    void disappearingStagingDirectoryIsConfirmedFromParentAfterRecursiveListError() {
+        var store = store("/anime/" + NAME, true);
+        when(api.fsListChecked("/anime", true)).thenReturn(
+                List.of(new OpenListFileInfo().setName(NAME).setIsDir(true)),
+                List.of());
+        when(api.findFiles("/anime/" + NAME))
+                .thenThrow(new IllegalStateException("OpenList fs/list: object not found"));
+        assertTrue(new OpenListStagingCleaner(api, store).cleanIfEmpty("task"));
+        assertTrue(store.get("task").isStagingCleaned());
+        verify(api, never()).fsRemove(anyString(), anyList());
+    }
+
+    @Test
+    void recursiveListErrorWithStagingStillVisibleMustRemainRetryable() {
+        var store = store("/anime/" + NAME, true);
+        stageExists("/anime");
+        when(api.findFiles("/anime/" + NAME))
+                .thenThrow(new IllegalStateException("OpenList fs/list: object not found"));
+        assertThrows(IllegalStateException.class,
+                () -> new OpenListStagingCleaner(api, store).cleanIfEmpty("task"));
+        assertFalse(store.get("task").isStagingCleaned());
+        verify(api, never()).fsRemove(anyString(), anyList());
+    }
+
+    @Test
     void alreadyAbsentDirectoryIsRecordedWithoutDeleteRequest() {
         var store = store("/anime/" + NAME, true);
         when(api.fsListChecked("/anime", true)).thenReturn(List.of());
