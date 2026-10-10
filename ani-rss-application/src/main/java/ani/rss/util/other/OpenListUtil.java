@@ -347,7 +347,16 @@ public class OpenListUtil {
         List<OpenListFileInfo> list = openListFileInfos.stream()
                 .flatMap(openListFileInfo -> {
                     if (openListFileInfo.getIsDir()) {
-                        return findFiles(path + "/" + openListFileInfo.getName()).stream();
+                        try {
+                            return findFiles(path + "/" + openListFileInfo.getName()).stream();
+                        } catch (IllegalStateException error) {
+                            if (error.getMessage() != null
+                                    && error.getMessage().contains("object not found")) {
+                                log.debug("OpenList 递归目录已不存在，跳过: {}", openListFileInfo.getName());
+                                return Stream.empty();
+                            }
+                            throw error;
+                        }
                     }
                     return Stream.of(openListFileInfo);
                 }).toList();
