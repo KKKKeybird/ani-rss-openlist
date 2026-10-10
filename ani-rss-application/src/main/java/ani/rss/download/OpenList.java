@@ -129,6 +129,7 @@ public class OpenList implements BaseDownload {
             List<String> taskFiles = List.copyOf(task.getFiles());
             TorrentsInfo info = new TorrentsInfo()
                     .setId(task.getId()).setHash(task.getHash()).setName(task.getName())
+                    .setStartTime(task.getSubmittedAt())
                     .setState(task.isCompleted() ? TorrentsStateEnum.stoppedUP
                             : OpenListTaskInfo.State.Failed.name().equals(task.getState())
                             ? TorrentsStateEnum.error : TorrentsStateEnum.downloading)
