@@ -120,6 +120,17 @@ let sortTypeList = [
     }
   },
   {
+    label: "开始时间",
+    value: "startTime",
+    fun: (value) => value.sort((a, b) => {
+      const aTime = Number(a.startTime) || 0
+      const bTime = Number(b.startTime) || 0
+      if (!aTime) return bTime ? 1 : 0
+      if (!bTime) return -1
+      return aTime - bTime
+    })
+  },
+  {
     label: "进度",
     value: "progress",
     fun: (value) => {
