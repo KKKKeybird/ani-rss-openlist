@@ -49,8 +49,20 @@ final class OpenListStagingCleaner {
             return false;
         }
         // Recursive listing counts files inside nested folders, including excluded files.
-        if (!api.findFiles(path).isEmpty()) {
-            return false;
+        // Cloud-backed entries may disappear after their parent listing was refreshed.
+        // Re-check the parent before retrying; never assume an API error means empty.
+        try {
+            if (!api.findFiles(path).isEmpty()) {
+                return false;
+            }
+        } catch (RuntimeException error) {
+            boolean absent = api.fsListChecked(parent, true).stream()
+                    .noneMatch(file -> name.equals(file.getName()));
+            if (absent) {
+                store.stagingChecked(id, now, true);
+                return true;
+            }
+            throw error;
         }
         if (!api.fsRemove(parent, List.of(name))) {
             throw new IllegalStateException("OpenList 空暂存目录清理失败: " + path);
