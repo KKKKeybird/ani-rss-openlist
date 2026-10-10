@@ -31,9 +31,6 @@ public class TransmissionTorrentsInfo implements Serializable {
         @SerializedName(value = "hashString", alternate = "hash_string")
         private String hashString;
 
-        @SerializedName(value = "addedDate", alternate = "added_date")
-        private Long addedDate;
-
         /**
          * 标签
          */
@@ -76,7 +73,6 @@ public class TransmissionTorrentsInfo implements Serializable {
         public TorrentsInfo toTorrentsInfo() {
             TorrentsStateEnum torrentsState = getTorrentsStateEnum();
 
-            if (addedDate != null && addedDate > 0) setStartTime(addedDate * 1000L);
             return progress(haveValid, totalSize)
                     .setHash(hashString)
                     .setTagList(labels)
