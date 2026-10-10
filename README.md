@@ -28,11 +28,13 @@
 
 这是基于 [ANI-RSS 上游项目](https://github.com/wushuo894/ani-rss) 的社区维护 fork。这里的 `main` 持续维护原生 OpenList 下载器，供需要 OpenList 的用户跟踪和贡献；它不是上游官方发布版本。
 
-当前基于上游 `v3.2.44`，支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+当前基于上游 `v3.2.45`，支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+
+**批量添加订阅：** 上游 `.45` 支持逐项编辑后确认添加，解析失败的条目可单独重试；同番剧选中的其他 RSS 作为备用 RSS，分别计算集数偏移。上游已移除“自动复制主 RSS 至备用 RSS”开关，已有订阅的备用 RSS 记录继续保留。
 
 **下载任务清理：** WebUI 的“下载”页支持逐个“删除任务”；“失败”标签页可一键“清理失败任务”。这些操作只删除任务和记录，保留已下载文件及暂存目录，不会删除订阅或种子缓存。OpenList 后台已不存在的历史失败任务也可清理，无需手工修改 `openlist-tasks.json`。后台状态查询或删除失败时保留记录并提示重试；批量清理会跳过已恢复的任务。持续启用的订阅仍可能按原有规则发起后续下载。
 
-手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。默认 Release 标签跟随上游版本并加 `-openlist`，例如 `v3.2.44-openlist`。按维护者要求发布修订版时，可手动指定 `release_revision=r1`，生成 `v3.2.44-openlist-r1`，应用版本仍为 `3.2.44`；不自动生成修订号或构建计数。每次发布同时更新 `latest` 和 `openj9` 滚动标签。默认不覆盖已有版本标签；明确要求更新同一版本时，可手动运行 `build` 并开启 `replace_existing_release`，在检查和打包成功后更新同名标签及 Release 附件，随后推送镜像。
+手动运行 `build` 工作流并通过检查后会生成 [GitHub Release](https://github.com/KKKKeybird/ani-rss-openlist/releases) 并构建多架构 Docker 镜像。镜像发布到 `ghcr.io/kkkkeybird/ani-rss-openlist:latest`，OpenJ9 变体使用 `:openj9`；版本标签随每次发布生成。这个 fork 不会覆盖上游的 Docker 镜像。默认 Release 标签跟随上游版本并加 `-openlist`，例如 `v3.2.45-openlist`。按维护者要求发布修订版时，可手动指定 `release_revision=r1`，生成 `v3.2.45-openlist-r1`，应用版本仍为 `3.2.45`；不自动生成修订号或构建计数。每次发布同时更新 `latest` 和 `openj9` 滚动标签。默认不覆盖已有版本标签；明确要求更新同一版本时，可手动运行 `build` 并开启 `replace_existing_release`，在检查和打包成功后更新同名标签及 Release 附件，随后推送镜像。
 
 仓库保留上游的 `build.yml` 手动发布流程：在 Actions 中选择 `build` → `Run workflow`，依次完成 OpenList 检查、打包、发布 Release、构建并推送 Temurin 和 OpenJ9 多架构镜像。Release 沿用上游的 `softprops/action-gh-release` 和 `UPDATE.md` 发布说明；若该 action 上传附件失败，自动使用 GitHub CLI 补齐附件并发布，补救失败则工作流失败。镜像使用本 fork 的 GHCR 地址。`openlist-check.yml` 执行回归测试和完整构建；没有启用自动拉取上游的工作流。
 

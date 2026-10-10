@@ -34,7 +34,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Verify OpenList compatibility
-        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
         env:
           REPLACE_EXISTING_RELEASE: ${{ inputs.replace_existing_release }}
