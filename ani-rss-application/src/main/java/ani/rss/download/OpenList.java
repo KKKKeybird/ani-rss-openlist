@@ -76,7 +76,7 @@ public class OpenList implements BaseDownload {
             boolean completed = task.isCompleted();
             if (!completed) {
                 try {
-                    completed = new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(taskId);
+                    completed = recoverTask(taskId);
                 } catch (Exception e) {
                     log.warn("OpenList 目标文件检查失败 {}: {}", taskId, e.getMessage());
                 }
@@ -175,6 +175,7 @@ public class OpenList implements BaseDownload {
         var task = taskStore.get(id);
         long deadline = task.getSubmittedAt() + Math.max(1, CONFIG.getOpenListDownloadTimeout()) * 60_000L;
         try {
+            if (recoverTask(id)) return;
             if (info.getState() == OpenListTaskInfo.State.Succeeded) {
                 // Transfer completion and cloud file visibility are separate stages.
                 finishTask(id, System.currentTimeMillis() + 60_000L);
@@ -212,36 +213,52 @@ public class OpenList implements BaseDownload {
             for (OpenListTaskStore.Task existing : taskStore.list()) {
                 if (FileUtil.mainName(torrentFile).equals(existing.getHash())) {
                     log.info("OpenList 任务已存在: {}", reName);
-                    return true;
+                    tid = existing.getId();
+                    path = existing.getStagingPath();
+                    break;
                 }
             }
-            Assert.isTrue(openListUtil.mkdir(path), "OpenList 创建暂存目录失败: {}", path);
-
-            try {
-                tid = openListUtil.fsAddOfflineDownload(magnet, path, CONFIG.getProvider());
-                log.info("添加离线下载成功 {}", reName);
-            } catch (Exception e) {
-                log.error("添加离线下载失败 {}", reName);
-                throw new IllegalStateException("添加离线下载失败 " + reName);
+            List<OpenListTaskStore.CollectionFile> expected = OpenListOrdinaryPlan.from(torrentFile,
+                    name -> CONFIG.getRename() ? getFileReName(name, reName) : name);
+            if (tid != null && taskStore.get(tid).getOrdinaryFiles().isEmpty()
+                    && taskStore.get(tid).getFiles().isEmpty()) {
+                taskStore.ordinaryFiles(tid, expected);
             }
-            taskStore.submitted(new OpenListTaskStore.Task()
-                    .setId(tid).setHash(FileUtil.mainName(torrentFile))
-                    .setName(reName).setSavePath(savePath).setStagingPath(path)
-                    .setTags(new ArrayList<>(newTags(ani, item))));
+            if (tid == null) {
+                Assert.isTrue(openListUtil.mkdir(path), "OpenList 创建暂存目录失败: {}", path);
+
+                try {
+                    tid = openListUtil.fsAddOfflineDownload(magnet, path, CONFIG.getProvider());
+                    log.info("添加离线下载成功 {}", reName);
+                } catch (Exception e) {
+                    log.error("添加离线下载失败 {}", reName);
+                    throw new IllegalStateException("添加离线下载失败 " + reName);
+                }
+                taskStore.submitted(new OpenListTaskStore.Task()
+                        .setId(tid).setHash(FileUtil.mainName(torrentFile))
+                        .setName(reName).setSavePath(savePath).setStagingPath(path)
+                        .setTags(new ArrayList<>(newTags(ani, item))).setOrdinaryFiles(expected)
+                        .setSubmittedAt(System.currentTimeMillis()));
+            }
 
             // 记录开始时间
             long deadline = System.currentTimeMillis()
                     + Math.max(1, CONFIG.getOpenListDownloadTimeout()) * 60_000L;
 
             // 重试次数
-            long retry = 0;
+            long retry = taskStore.get(tid).getRetries();
             while (true) {
                 var current = taskStore.get(tid);
                 if (current == null || deletingTasks.contains(tid)) {
                     throw new CancellationException("OpenList 下载任务已被删除");
                 }
-                if (current.isCompleted()) {
-                    return true;
+                try {
+                    if (current.isCompleted() || recoverTask(tid)) return true;
+                } catch (Exception e) {
+                    log.warn("OpenList 文件核对待重试 {}: {}", tid, e.getMessage());
+                    if (System.currentTimeMillis() >= deadline) return downloadFailed(tid);
+                    ThreadUtil.sleep(2000);
+                    continue;
                 }
                 Long openListDownloadRetryNumber = CONFIG.getOpenListDownloadRetryNumber();
 
@@ -278,16 +295,6 @@ public class OpenList implements BaseDownload {
                     // 已到达最大重试次数 5 次, -1 不限制
                     if (openListDownloadRetryNumber > -1) {
                         if (retry >= openListDownloadRetryNumber) {
-                            // bug fix: 新资源下载完成后，OpenList 状态可能未及时刷新
-                            // 此处通过检查文件是否存在来兜底，存在则直接继续后续逻辑
-                            Optional<OpenListFileInfo> first = openListUtil.findFiles(path)
-                                    .stream()
-                                    .filter(openListFileInfo -> FileUtils.isVideoFormat(openListFileInfo.getName()))
-                                    .findFirst();
-                            if (first.isPresent()) {
-                                log.info("资源已下载完毕，OpenList 可能处于卡死状态，此处跳过");
-                                break;
-                            }
                             log.error("离线下载失败 {}", error);
                             taskStore.failed(tid, error);
                             return downloadFailed(tid);
@@ -339,9 +346,42 @@ public class OpenList implements BaseDownload {
         return false;
     }
 
+    private synchronized boolean recoverTask(String id) {
+        var task = taskStore.get(id);
+        if (task == null || deletingTasks.contains(id)) return false;
+        if (task.isCompleted()) return true;
+        if (new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(id)) return true;
+        if (task.getCollectionFiles().isEmpty() && task.getOrdinaryFiles().isEmpty() && task.getFiles().isEmpty()) {
+            // Older tasks can recover their source plan from the original cached torrent.
+            final var recorded = task;
+            File root = new File(ConfigUtil.getConfigDir(), "torrents");
+            if (root.isDirectory()) {
+                try (var files = java.nio.file.Files.walk(root.toPath())) {
+                    var cached = files.filter(path -> path.getFileName().toString().equals(recorded.getHash() + ".torrent"))
+                            .findFirst();
+                    if (cached.isPresent() && TorrentMetadata.from(cached.get().toFile()).getHash().equals(task.getHash())) {
+                        var expected = OpenListOrdinaryPlan.from(cached.get().toFile(),
+                                name -> CONFIG.getRename() ? getFileReName(name, recorded.getName()) : name);
+                        taskStore.ordinaryFiles(id, expected);
+                    }
+                } catch (Exception e) {
+                    log.warn("OpenList 历史任务文件计划读取失败 {}: {}", id, e.getMessage());
+                }
+            }
+        }
+        task = taskStore.get(id);
+        if (OpenListCollectionOrganizer.entries(task).isEmpty()) return false;
+        if (!task.isCollectionPlanned()
+                && !OpenListOrdinaryPlan.ready(task, openListUtil.findFiles(task.getStagingPath()))) return false;
+        return finishTask(id, System.currentTimeMillis() + 60_000L);
+    }
+
     private synchronized boolean retryDownload(String tid) {
         downloadFailed(tid);
-        return openListUtil.taskRetry(tid);
+        if (recoverTask(tid)) return true;
+        boolean retried = openListUtil.taskRetry(tid);
+        if (retried) taskStore.retried(tid);
+        return retried;
     }
 
     private synchronized Boolean finishTask(String tid, long deadline) {
@@ -355,8 +395,11 @@ public class OpenList implements BaseDownload {
         if (new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(tid)) {
             return true;
         }
-        if (!task.getCollectionFiles().isEmpty()) {
+        if (!OpenListCollectionOrganizer.entries(task).isEmpty()) {
             return new OpenListCollectionOrganizer(openListUtil, taskStore).finish(tid, deadline);
+        }
+        if (task.getFiles().isEmpty()) {
+            throw new IllegalStateException("OpenList 缺少种子文件计划，不能确认完整性: " + tid);
         }
         String savePath = task.getSavePath();
         String path = task.getStagingPath();

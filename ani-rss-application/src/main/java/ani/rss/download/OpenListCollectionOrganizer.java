@@ -43,12 +43,12 @@ final class OpenListCollectionOrganizer {
         if (!task.isCollectionPlanned()) {
             // Validate all files and collisions before renaming or moving anything.
             Set<String> resolved = new HashSet<>();
-            for (var entry : task.getCollectionFiles()) {
+            for (var entry : entries(task)) {
                 if (destination.stream().anyMatch(file -> file.getName().equals(entry.getTarget()))) {
                     throw new IllegalStateException("OpenList 目标文件已存在: " + entry.getTarget());
                 }
                 List<OpenListFileInfo> matches = staged.stream()
-                        .filter(file -> Objects.equals(file.getSize(), entry.getLength()))
+                        .filter(file -> Boolean.FALSE.equals(file.getIsDir()) && Objects.equals(file.getSize(), entry.getLength()))
                         .filter(file -> {
                             String relative = fullPath(file).substring(task.getStagingPath().length() + 1);
                             return relative.equals(entry.getSource()) || relative.endsWith("/" + entry.getSource());
@@ -66,9 +66,13 @@ final class OpenListCollectionOrganizer {
                 }
                 entry.setResolvedPath(path);
             }
-            store.planCollection(id, task.getCollectionFiles());
+            if (task.getCollectionFiles().isEmpty()) {
+                store.planOrdinary(id, entries(task));
+            } else {
+                store.planCollection(id, entries(task));
+            }
         }
-        for (var entry : store.get(id).getCollectionFiles()) {
+        for (var entry : entries(store.get(id))) {
             // A previous attempt may have moved some files before restart.
             Optional<OpenListFileInfo> existing = destination.stream()
                     .filter(file -> file.getName().equals(entry.getTarget())).findFirst();
@@ -102,16 +106,20 @@ final class OpenListCollectionOrganizer {
             api.fsMoveAndWait(parent, task.getSavePath(), List.of(entry.getTarget()), deadline);
         }
         List<OpenListFileInfo> confirmed = api.fsListChecked(task.getSavePath(), true);
-        if (!store.get(id).getCollectionFiles().stream().allMatch(entry -> confirmed.stream()
-                .anyMatch(file -> file.getName().equals(entry.getTarget())
-                        && Objects.equals(file.getSize(), entry.getLength())))) {
+        if (!entries(store.get(id)).stream().allMatch(entry -> confirmed.stream()
+                .filter(file -> Boolean.FALSE.equals(file.getIsDir()) && file.getName().equals(entry.getTarget())
+                        && Objects.equals(file.getSize(), entry.getLength())).count() == 1)) {
             throw new IllegalStateException("OpenList 合集移动后文件尚不可见，稍后重试");
         }
         var planned = store.get(id);
-        long size = planned.getCollectionFiles().stream().mapToLong(OpenListTaskStore.CollectionFile::getLength).sum();
+        long size = entries(planned).stream().mapToLong(OpenListTaskStore.CollectionFile::getLength).sum();
         store.completed(id, planned.getFiles(), size);
         // Keep excluded files in the isolated staging directory for user inspection.
         return true;
+    }
+
+    static List<OpenListTaskStore.CollectionFile> entries(OpenListTaskStore.Task task) {
+        return task.getCollectionFiles().isEmpty() ? task.getOrdinaryFiles() : task.getCollectionFiles();
     }
 
     private static String fullPath(OpenListFileInfo file) {

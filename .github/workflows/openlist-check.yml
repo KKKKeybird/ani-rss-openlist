@@ -21,6 +21,6 @@ jobs:
           java-version: '25'
           cache: maven
       - name: Compile and run OpenList tests
-        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
         run: bash ./package.sh

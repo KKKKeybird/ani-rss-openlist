@@ -36,6 +36,7 @@ class OpenListCompletionVerifierTest {
         OpenList downloader = mock(OpenList.class, CALLS_REAL_METHODS);
         ReflectionTestUtils.setField(downloader, "openListUtil", api);
         ReflectionTestUtils.setField(downloader, "taskStore", store);
+        ReflectionTestUtils.setField(downloader, "deletingTasks", java.util.concurrent.ConcurrentHashMap.newKeySet());
         return downloader;
     }
 
@@ -160,6 +161,9 @@ class OpenListCompletionVerifierTest {
     void ordinaryArchivePlanStoresIndividualLengthsWithoutDoubleCountingTransferSize() {
         var store = store();
         store.progress("task", new ani.rss.entity.OpenListTaskInfo().setTotalBytes(110L));
+        store.ordinaryFiles("task", List.of(
+                new OpenListTaskStore.CollectionFile().setSource("original.mkv").setTarget("Show E01.mkv").setLength(100),
+                new OpenListTaskStore.CollectionFile().setSource("original.chs.ass").setTarget("Show E01.chs.ass").setLength(10)));
         when(api.fsListChecked("/anime", true)).thenReturn(List.of(),
                 List.of(file("Show E01.mkv", 100), file("Show E01.chs.ass", 10)));
         when(api.findFiles("/anime/.stage")).thenReturn(List.of(

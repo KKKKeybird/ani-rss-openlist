@@ -169,6 +169,7 @@ public class OpenListTaskStore {
                 .setStagingCheckedAt(source.getStagingCheckedAt())
                 .setStagingCleaned(source.isStagingCleaned())
                 .setCollectionFiles(source.getCollectionFiles().stream().map(CollectionFile::copy).toList())
+                .setOrdinaryFiles(source.getOrdinaryFiles().stream().map(CollectionFile::copy).toList())
                 .setCollectionPlanned(source.isCollectionPlanned())
                 .setSubmittedAt(source.getSubmittedAt())
                 .setRetries(source.getRetries())
@@ -189,6 +190,21 @@ public class OpenListTaskStore {
         task.setCollectionPlanned(true);
         task.setFiles(entries.stream().map(CollectionFile::getTarget).toList());
         task.setSize(entries.stream().mapToLong(CollectionFile::getLength).sum());
+        save();
+    }
+
+    public synchronized void ordinaryFiles(String id, List<CollectionFile> entries) {
+        require(id).setOrdinaryFiles(entries.stream().map(CollectionFile::copy).toList());
+        save();
+    }
+
+    public synchronized void planOrdinary(String id, List<CollectionFile> entries) {
+        ordinaryFiles(id, entries);
+        var sizes = new LinkedHashMap<String, Long>();
+        entries.forEach(entry -> sizes.put(entry.getTarget(), entry.getLength()));
+        planned(id, entries.stream().map(CollectionFile::getTarget).toList(),
+                entries.stream().mapToLong(CollectionFile::getLength).sum(), sizes);
+        require(id).setCollectionPlanned(true);
         save();
     }
 
@@ -226,6 +242,7 @@ public class OpenListTaskStore {
         private List<String> files = new ArrayList<>();
         private Map<String, Long> fileSizes = new LinkedHashMap<>();
         private List<CollectionFile> collectionFiles = new ArrayList<>();
+        private List<CollectionFile> ordinaryFiles = new ArrayList<>();
         private boolean collectionPlanned;
         private long submittedAt;
         private long retries;
