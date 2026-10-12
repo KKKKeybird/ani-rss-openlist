@@ -5,6 +5,10 @@ import ani.rss.entity.Ani;
 import ani.rss.entity.Config;
 import ani.rss.handle.JsonReader;
 import ani.rss.handle.JsonWriter;
+import ani.rss.download.BaseDownload;
+import ani.rss.download.OpenList;
+import ani.rss.download.qBittorrent;
+import cn.hutool.extra.spring.SpringUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class OpenListUpstreamCompatibilityTest {
     @TempDir
@@ -58,6 +63,45 @@ class OpenListUpstreamCompatibilityTest {
         assertEquals("test-driver", loaded.getProvider());
         assertEquals(120, loaded.getOpenListDownloadTimeout());
         assertEquals(8L, loaded.getOpenListDownloadRetryNumber());
+    }
+
+    @Test
+    void openListSelectionStillLoadsNativeDownloaderAfterUpstreamRemoval() throws Exception {
+        assertDownloader("OpenList", OpenList.class, false);
+    }
+
+    @Test
+    void legacyAlistSelectionMigratesAndPersistsBeforeLoadingOpenList() throws Exception {
+        assertDownloader("Alist", OpenList.class, true);
+    }
+
+    @Test
+    void unknownDownloaderRetainsUpstreamFallback() throws Exception {
+        assertDownloader("unknown", qBittorrent.class, false);
+    }
+
+    private void assertDownloader(String selection, Class<? extends BaseDownload> type, boolean migration) throws Exception {
+        Config configured = ConfigUtil.CONFIG;
+        String previous = configured.getDownloadToolType();
+        var downloadField = TorrentUtil.class.getDeclaredField("DOWNLOAD");
+        downloadField.setAccessible(true);
+        Object previousDownload = downloadField.get(null);
+        BaseDownload downloader = mock(type);
+        try (var spring = mockStatic(SpringUtil.class); var config = mockStatic(ConfigUtil.class)) {
+            configured.setDownloadToolType(selection);
+            spring.when(() -> SpringUtil.getBean(type)).thenAnswer(invocation -> downloader);
+            TorrentUtil.loadDownloadTool();
+            assertSame(downloader, downloadField.get(null));
+            if (migration) {
+                assertEquals("OpenList", configured.getDownloadToolType());
+                config.verify(ConfigUtil::sync);
+            } else {
+                config.verify(ConfigUtil::sync, never());
+            }
+        } finally {
+            configured.setDownloadToolType(previous);
+            downloadField.set(null, previousDownload);
+        }
     }
 
     @Test
