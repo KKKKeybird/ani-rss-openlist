@@ -115,7 +115,6 @@ export let configData = {
     "scrape": false,
     "followDay": 14,
     "bangumiIniEnabled": false,
-    "replace": false,
     "maxFileNameLength": 0,
     "limitLoginAttempts": true,
     "gitInfo": {
