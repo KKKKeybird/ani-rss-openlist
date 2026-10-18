@@ -139,3 +139,9 @@ SharonNetworks 为您的业务起飞保驾护航！
 
 [![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source-sm.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
 
+
+### OpenList 文件名与通知恢复
+
+种子文件名按 UTF-8 解码，保留原始 info 字节计算 hash。历史乱码计划只在原暂存目录中存在唯一、大小吻合的正常文件名时自动修复；不会仅凭视频存在就认定完成。远端任务消失后保留记录和文件，状态查询退避五分钟，仍继续检查文件。核对不通过时每五分钟记录预期文件与实际文件的差异。
+
+完成通知在渠道返回成功后才写入去重标签，返回 false 或异常都会按配置重试。各渠道的成功记录持久化到配置目录 `cache/notification-deliveries.json`；部分渠道失败时只补发失败渠道，失败轮次之间间隔五分钟。自动任务清理等待通知处理确认。没有启用通知的订阅或渠道会明确按配置跳过。渠道成功仅代表邮件等已交给对应发送接口，不代表收件箱最终送达。既有完成标签保留，升级不会批量重发历史通知。

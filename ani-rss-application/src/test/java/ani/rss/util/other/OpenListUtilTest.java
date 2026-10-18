@@ -120,4 +120,20 @@ class OpenListUtilTest {
             output.write(body);
         }
     }
+    @Test
+    void missingTaskIsDistinguishableFromPermissionOrNetworkErrors() throws IOException {
+        OpenListUtil api = api();
+        server.createContext("/api/task/offline_download/info", exchange ->
+                reply(exchange, "{\"code\":500,\"message\":\"task not found\"}"));
+        assertThrows(OpenListUtil.TaskMissingException.class, () -> api.taskInfo("missing"));
+    }
+
+    @Test
+    void permissionFailureDoesNotBecomeMissingTask() throws IOException {
+        OpenListUtil api = api();
+        server.createContext("/api/task/offline_download/info", exchange ->
+                reply(exchange, "{\"code\":401,\"message\":\"unauthorized\"}"));
+        assertTrue(api.taskInfo("existing").isEmpty());
+    }
+
 }

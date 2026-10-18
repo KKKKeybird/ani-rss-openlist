@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class OpenList implements BaseDownload {
     private static final Config CONFIG = ConfigUtil.CONFIG;
+    private static final Map<String, Long> PENDING_CHECK_LOGS = new ConcurrentHashMap<>();
 
     private final OpenListUtil openListUtil = OpenListUtil.getInstance(new OpenListConfig() {
         @Override
@@ -82,22 +83,28 @@ public class OpenList implements BaseDownload {
                 }
             }
             if (!completed) {
-                openListUtil.taskInfo(taskId).ifPresent(info -> {
-                    taskStore.progress(taskId, info);
-                    var recorded = taskStore.get(taskId);
-                    if (recorded == null) {
-                        return;
-                    }
-                    if (!recorded.getCollectionFiles().isEmpty()) {
-                        reconcileCollection(taskId, info);
-                    } else if (info.getState() == OpenListTaskInfo.State.Succeeded) {
-                        try {
-                            finishTask(taskId, System.currentTimeMillis() + 60_000L);
-                        } catch (Exception e) {
-                            log.warn("OpenList 文件整理待重试 {}: {}", info.getId(), e.getMessage());
+                try {
+                    (task.getRemoteMissingUntil() > System.currentTimeMillis()
+                            ? Optional.<OpenListTaskInfo>empty() : openListUtil.taskInfo(taskId)).ifPresent(info -> {
+                        taskStore.progress(taskId, info);
+                        var recorded = taskStore.get(taskId);
+                        if (recorded == null) {
+                            return;
                         }
-                    }
-                });
+                        if (!recorded.getCollectionFiles().isEmpty()) {
+                            reconcileCollection(taskId, info);
+                        } else if (info.getState() == OpenListTaskInfo.State.Succeeded) {
+                            try {
+                                finishTask(taskId, System.currentTimeMillis() + 60_000L);
+                            } catch (Exception e) {
+                                log.warn("OpenList 文件整理待重试 {}: {}", info.getId(), e.getMessage());
+                            }
+                        }
+                    });
+                } catch (OpenListUtil.TaskMissingException e) {
+                    taskStore.remoteMissing(taskId);
+                    log.warn("OpenList 远端任务已消失，暂停状态查询五分钟并保留文件核对: {} {}", taskId, task.getName());
+                }
                 var current = taskStore.get(taskId);
                 if (current == null) {
                     continue;
@@ -269,7 +276,15 @@ public class OpenList implements BaseDownload {
                     return downloadFailed(tid);
                 }
 
-                Optional<OpenListTaskInfo> taskInfoOpt = openListUtil.taskInfo(tid);
+                if (current.getRemoteMissingUntil() > System.currentTimeMillis()) return downloadFailed(tid);
+                Optional<OpenListTaskInfo> taskInfoOpt;
+                try {
+                    taskInfoOpt = openListUtil.taskInfo(tid);
+                } catch (OpenListUtil.TaskMissingException e) {
+                    taskStore.remoteMissing(tid);
+                    log.warn("OpenList 远端任务已消失，保留任务及文件等待恢复: {}", tid);
+                    return downloadFailed(tid);
+                }
 
                 if (taskInfoOpt.isEmpty()) {
                     if (new OpenListCompletionVerifier(openListUtil, taskStore).completeIfPresent(tid)) {
@@ -371,8 +386,43 @@ public class OpenList implements BaseDownload {
         }
         task = taskStore.get(id);
         if (OpenListCollectionOrganizer.entries(task).isEmpty()) return false;
-        if (!task.isCollectionPlanned()
-                && !OpenListOrdinaryPlan.ready(task, openListUtil.findFiles(task.getStagingPath()))) return false;
+        if (!task.isCollectionPlanned()) {
+            var staged = openListUtil.findFiles(task.getStagingPath());
+            var entries = OpenListCollectionOrganizer.entries(task);
+            boolean repaired = false;
+            for (var entry : entries) {
+                String decoded = TorrentMetadata.decodeFilename(entry.getSource());
+                if (decoded.equals(entry.getSource())) continue;
+                var probe = new OpenListTaskStore.Task().setStagingPath(task.getStagingPath())
+                        .setOrdinaryFiles(List.of(new OpenListTaskStore.CollectionFile()
+                                .setSource(decoded).setTarget(entry.getTarget()).setLength(entry.getLength())));
+                var original = new OpenListTaskStore.Task().setStagingPath(task.getStagingPath())
+                        .setOrdinaryFiles(List.of(entry));
+                if (OpenListOrdinaryPlan.matches(original, entry, staged) == 0 && OpenListOrdinaryPlan.ready(probe, staged)) {
+                    String oldBase = entry.getSource().substring(entry.getSource().lastIndexOf('/') + 1);
+                    if (entry.getTarget().equals(oldBase)) entry.setTarget(decoded.substring(decoded.lastIndexOf('/') + 1));
+                    entry.setSource(decoded);
+                    repaired = true;
+                }
+            }
+            if (repaired) {
+                OpenListCollectionOrganizer.validate(entries);
+                taskStore.sourceNames(id, entries);
+                task = taskStore.get(id);
+                log.info("OpenList 已恢复旧任务 UTF-8 源文件名计划: {} {}", id, task.getName());
+            }
+            if (!OpenListOrdinaryPlan.ready(task, staged)) {
+                long now = System.currentTimeMillis();
+                if (now - PENDING_CHECK_LOGS.getOrDefault(id, 0L) >= 300_000L) {
+                    PENDING_CHECK_LOGS.put(id, now);
+                    log.warn("OpenList 文件核对未通过 task={} title={} stage={} expected={} actual={}",
+                            id, task.getName(), task.getStagingPath(),
+                            entries.stream().map(e -> e.getSource() + " (" + e.getLength() + ")").limit(20).toList(),
+                            staged.stream().map(f -> f.getName() + " (" + f.getSize() + ")").limit(20).toList());
+                }
+                return false;
+            }
+        }
         return finishTask(id, System.currentTimeMillis() + 60_000L);
     }
 

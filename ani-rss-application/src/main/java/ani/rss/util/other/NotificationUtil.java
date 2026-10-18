@@ -1,6 +1,7 @@
 package ani.rss.util.other;
 
 import ani.rss.entity.Ani;
+import ani.rss.commons.GsonStatic;
 import ani.rss.entity.Config;
 import ani.rss.entity.NotificationConfig;
 import ani.rss.enums.NotificationStatusEnum;
@@ -65,7 +66,6 @@ public class NotificationUtil {
 
         for (NotificationConfig notificationConfig : notificationConfigList) {
             boolean enable = notificationConfig.getEnable();
-            int retry = notificationConfig.getRetry();
             NotificationTypeEnum notificationType = notificationConfig.getNotificationType();
             List<NotificationStatusEnum> statusList = notificationConfig.getStatusList();
 
@@ -94,22 +94,57 @@ public class NotificationUtil {
             Class<? extends BaseNotification> aClass = NOTIFICATION_MAP.get(notificationType);
 
             BaseNotification baseNotification = ReflectUtil.newInstance(aClass);
-            EXECUTOR_SERVICE.execute(() -> {
-                int currentRetry = 0;
-                do {
-                    if (currentRetry > 0) {
-                        log.warn("通知失败 正在重试 第{}次 {}", currentRetry, aClass.getName());
-                    }
-                    try {
-                        baseNotification.send(notificationConfig, ani, text, notificationStatusEnum);
-                        return;
-                    } catch (Exception e) {
-                        log.error(e.getMessage(), e);
-                    }
-                    currentRetry += 1;
-                    ThreadUtil.sleep(1000);
-                } while (currentRetry < retry);
-            });
+            EXECUTOR_SERVICE.execute(() -> deliver(baseNotification, notificationConfig, ani, text, notificationStatusEnum));
         }
     }
+    static boolean deliver(BaseNotification sender, NotificationConfig config, Ani ani, String text,
+                           NotificationStatusEnum status) {
+        int attempts = Math.max(1, config.getRetry() == null ? 1 : config.getRetry());
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                if (Boolean.TRUE.equals(sender.send(config, ani, text, status))) {
+                    log.info("通知渠道返回成功 type={} event={} title={}", config.getNotificationType(), status, ani.getTitle());
+                    return true;
+                }
+                log.warn("通知渠道返回失败 type={} event={} title={} attempt={}/{}",
+                        config.getNotificationType(), status, ani.getTitle(), attempt, attempts);
+            } catch (Exception e) {
+                log.warn("通知发送异常 type={} event={} title={} attempt={}/{} exception={}",
+                        config.getNotificationType(), status, ani.getTitle(), attempt, attempts, e.getClass().getSimpleName());
+            }
+            if (attempt < attempts) ThreadUtil.sleep(1000);
+        }
+        return false;
+    }
+
+    private static class CompletionHolder {
+        static final CompletionNotificationDelivery DELIVERY = new CompletionNotificationDelivery(
+                new java.io.File(ConfigUtil.getConfigDir(), "cache/notification-deliveries.json"),
+                EXECUTOR_SERVICE, System::currentTimeMillis);
+    }
+
+    public static void sendCompletion(Config config, Ani ani, String text, String task,
+                                      java.util.function.BooleanSupplier acknowledge) {
+        var channels = new java.util.ArrayList<CompletionNotificationDelivery.Channel>();
+        if (Boolean.TRUE.equals(ani.getMessage())) {
+            int index = 0;
+            for (var source : config.getNotificationConfigList().stream()
+                    .sorted(Comparator.comparingLong(NotificationConfig::getSort)).toList()) {
+                int ordinal = index++;
+                if (!Boolean.TRUE.equals(source.getEnable()) || source.getStatusList() == null
+                        || !source.getStatusList().contains(NotificationStatusEnum.DOWNLOAD_END)
+                        || source.getNotificationType() == null || !NOTIFICATION_MAP.containsKey(source.getNotificationType())) continue;
+                var snapshot = cn.hutool.core.util.ObjectUtil.clone(source);
+                var subject = cn.hutool.core.util.ObjectUtil.clone(ani);
+                String key = cn.hutool.crypto.digest.DigestUtil.sha256Hex(ordinal + ":"
+                        + GsonStatic.toJson(snapshot));
+                BaseNotification sender = ReflectUtil.newInstance(NOTIFICATION_MAP.get(snapshot.getNotificationType()));
+                channels.add(new CompletionNotificationDelivery.Channel(key, () -> deliver(
+                        sender, snapshot, subject, text, NotificationStatusEnum.DOWNLOAD_END)));
+            }
+        }
+        if (channels.isEmpty()) log.info("完成通知按配置跳过 task={} title={}", task, ani.getTitle());
+        CompletionHolder.DELIVERY.submit(task, channels, acknowledge);
+    }
+
 }

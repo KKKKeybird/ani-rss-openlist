@@ -172,6 +172,7 @@ public class OpenListTaskStore {
                 .setOrdinaryFiles(source.getOrdinaryFiles().stream().map(CollectionFile::copy).toList())
                 .setCollectionPlanned(source.isCollectionPlanned())
                 .setSubmittedAt(source.getSubmittedAt())
+                .setRemoteMissingUntil(source.getRemoteMissingUntil())
                 .setRetries(source.getRetries())
                 .setTags(new ArrayList<>(source.getTags()))
                 .setFiles(new ArrayList<>(source.getFiles()))
@@ -205,6 +206,23 @@ public class OpenListTaskStore {
         planned(id, entries.stream().map(CollectionFile::getTarget).toList(),
                 entries.stream().mapToLong(CollectionFile::getLength).sum(), sizes);
         require(id).setCollectionPlanned(true);
+        save();
+    }
+
+    public synchronized void sourceNames(String id, List<CollectionFile> entries) {
+        var task = require(id);
+        if (task.isCollectionPlanned()) throw new IllegalStateException("Archive already planned");
+        if (task.getCollectionFiles().isEmpty()) task.setOrdinaryFiles(entries.stream().map(CollectionFile::copy).toList());
+        else task.setCollectionFiles(entries.stream().map(CollectionFile::copy).toList());
+        save();
+    }
+
+    public synchronized void remoteMissing(String id) {
+        var task = require(id);
+        if (task.isCompleted()) return;
+        task.setRemoteMissingUntil(System.currentTimeMillis() + 300_000L);
+        task.setState(OpenListTaskInfo.State.Failed.name());
+        task.setError("OpenList 远端任务已不存在，保留文件并继续核对完成状态");
         save();
     }
 
@@ -246,6 +264,7 @@ public class OpenListTaskStore {
         private boolean collectionPlanned;
         private long submittedAt;
         private long retries;
+        private long remoteMissingUntil;
         private long size;
         private int progress;
         private String state = OpenListTaskInfo.State.Pending.name();

@@ -41,13 +41,18 @@ final class OpenListOrdinaryPlan {
         var entries = OpenListCollectionOrganizer.entries(task);
         if (entries.isEmpty()) return false;
         if (task.isCollectionPlanned()) return true; // The organizer verifies partial moves and renames.
-        return entries.stream().allMatch(entry -> staged.stream().filter(file -> {
+        return entries.stream().allMatch(entry -> matches(task, entry, staged) == 1);
+    }
+
+    static long matches(OpenListTaskStore.Task task, OpenListTaskStore.CollectionFile entry,
+                        List<ani.rss.entity.OpenListFileInfo> staged) {
+        return staged.stream().filter(file -> {
             String path = file.getPath() + "/" + file.getName();
             String prefix = task.getStagingPath() + "/";
             if (!path.startsWith(prefix)) return false;
             String relative = path.substring(prefix.length());
             return Boolean.FALSE.equals(file.getIsDir()) && Objects.equals(file.getSize(), entry.getLength())
                     && (relative.equals(entry.getSource()) || relative.endsWith("/" + entry.getSource()));
-        }).count() == 1);
+        }).count();
     }
 }

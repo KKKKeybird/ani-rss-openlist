@@ -226,6 +226,10 @@ public class OpenListUtil {
      * @param tid 任务id
      * @return 任务信息
      */
+    public static final class TaskMissingException extends IllegalStateException {
+        public TaskMissingException(String id) { super("OpenList task not found: " + id); }
+    }
+
     public Optional<OpenListTaskInfo> taskInfo(String tid) {
         return taskInfo("offline_download", tid);
     }
@@ -245,6 +249,9 @@ public class OpenListUtil {
                     });
             return Optional.ofNullable(taskInfo);
         } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().equals("OpenList task/offline_download/info: task not found")) {
+                throw new TaskMissingException(tid);
+            }
             log.error(e.getMessage(), e);
         }
         return Optional.empty();

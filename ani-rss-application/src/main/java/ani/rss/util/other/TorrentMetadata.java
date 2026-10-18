@@ -136,7 +136,7 @@ public final class TorrentMetadata {
             collectV2Files(dictionary(info.get("file tree")), new ArrayList<>(), entries);
             return entries;
         }
-        return List.of(new TorrentFileEntry(string(info.get("name")), number(info.get("length"))));
+        return List.of(new TorrentFileEntry(string(info.getOrDefault("name.utf-8", info.get("name"))), number(info.get("length"))));
     }
 
     /**
@@ -149,7 +149,7 @@ public final class TorrentMetadata {
         List<TorrentFileEntry> entries = new ArrayList<>(fileList.size());
         for (Object file : fileList) {
             Map<String, Object> fileInfo = dictionary(file);
-            Object path = fileInfo.get("path");
+            Object path = fileInfo.getOrDefault("path.utf-8", fileInfo.get("path"));
             if (!(path instanceof List<?> segments)) {
                 throw new IllegalArgumentException("Torrent file entry does not contain a path");
             }
@@ -174,7 +174,7 @@ public final class TorrentMetadata {
                 continue;
             }
             List<String> childPath = new ArrayList<>(path);
-            childPath.add(entry.getKey());
+            childPath.add(string(entry.getKey()));
             collectV2Files(dictionary(entry.getValue()), childPath, entries);
         }
     }
@@ -236,9 +236,22 @@ public final class TorrentMetadata {
      * @param value bencode 解码值
      * @return 字符串值
      */
+    /** Recover UTF-8 filenames from the lossless byte-to-Latin-1 bencode representation. */
+    public static String decodeFilename(String value) {
+        if (value.chars().anyMatch(c -> c > 255)) return value;
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                    .decode(java.nio.ByteBuffer.wrap(value.getBytes(StandardCharsets.ISO_8859_1))).toString();
+        } catch (java.nio.charset.CharacterCodingException e) {
+            return value; // A legacy non-UTF-8 name must not be replaced with U+FFFD.
+        }
+    }
+
     private static String string(Object value) {
         if (value instanceof String string) {
-            return string;
+            return decodeFilename(string);
         }
         throw new IllegalArgumentException("Expected a bencoded string");
     }

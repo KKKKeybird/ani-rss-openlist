@@ -213,4 +213,50 @@ class OpenListRecoveryTest {
             ConfigUtil.CONFIG.setRename(rename);
         }
     }
+    @Test
+    void legacyMojibakePlanRecoversOnlyFromUniqueExactSizedUnicodeFile() {
+        String real = "Steel Ball Run：04.mkv";
+        String garbled = new String(real.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+        var store = store(List.of(entry(garbled, "E01.mkv", 100)));
+        when(api.findFiles("/anime/.stage")).thenReturn(List.of(file("/anime/.stage", real, 100)));
+        when(api.fsListChecked("/anime", true)).thenReturn(List.of(), List.of(file("/anime", "E01.mkv", 100)));
+        when(api.fsBatchRename(anyList(), anyString())).thenReturn(true);
+        downloader(store).getTorrentsInfos();
+        assertTrue(store.get("task").isCompleted());
+        assertEquals(real, new OpenListTaskStore(directory.resolve("tasks.json").toFile()).get("task").getOrdinaryFiles().getFirst().getSource());
+        verify(api, never()).taskRetry(anyString());
+    }
+
+    @Test
+    void ambiguousOrWrongSizedUnicodeFilesCannotRepairLegacyPlan() {
+        String real = "Steel Ball Run：04.mkv";
+        String garbled = new String(real.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+        var store = store(List.of(entry(garbled, "E01.mkv", 100)));
+        var downloader = downloader(store);
+        when(api.findFiles("/anime/.stage")).thenReturn(List.of(file("/anime/.stage", real, 99)));
+        downloader.getTorrentsInfos();
+        assertEquals(garbled, store.get("task").getOrdinaryFiles().getFirst().getSource());
+        when(api.findFiles("/anime/.stage")).thenReturn(List.of(file("/anime/.stage/a", real, 100), file("/anime/.stage/b", real, 100)));
+        downloader.getTorrentsInfos();
+        assertFalse(store.get("task").isCompleted());
+        assertEquals(garbled, store.get("task").getOrdinaryFiles().getFirst().getSource());
+        verify(api, never()).fsBatchRename(anyList(), anyString());
+    }
+
+    @Test
+    void missingRemoteTaskBacksOffAcrossRestartButStillRecoversFiles() {
+        var store = store(List.of(entry("01.mkv", "E01.mkv", 100)));
+        when(api.taskInfo("task")).thenThrow(new OpenListUtil.TaskMissingException("task"));
+        var downloader = downloader(store);
+        downloader.getTorrentsInfos();
+        var restarted = new OpenListTaskStore(directory.resolve("tasks.json").toFile());
+        assertTrue(restarted.get("task").getRemoteMissingUntil() > System.currentTimeMillis());
+        downloader(restarted).getTorrentsInfos();
+        verify(api,times(1)).taskInfo("task");
+        stageComplete();
+        downloader(restarted).getTorrentsInfos();
+        assertTrue(restarted.get("task").isCompleted());
+        verify(api,times(1)).taskInfo("task");
+    }
+
 }

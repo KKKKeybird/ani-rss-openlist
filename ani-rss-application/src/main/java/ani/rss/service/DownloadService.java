@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 public class DownloadService {
     private static final Config CONFIG = ConfigUtil.CONFIG;
     private static final Object LOCK = new Object();
+    private static final Map<String, Long> COMPLETION_WARNINGS = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Resource
     private ScrapeService scrapeService;
@@ -411,9 +412,9 @@ public class DownloadService {
         // 删除下载失败的种子, 下次轮询仍会重试
         FileUtil.del(torrentFile);
 
-        log.error("{} 添加失败，疑似为坏种", name);
+        log.error("{} 下载任务未完成，请检查下载器状态及文件核对结果", name);
         NotificationUtil.send(CONFIG, ani,
-                StrFormatter.format("{} 添加失败，疑似为坏种", name),
+                StrFormatter.format("{} 下载任务未完成，请检查下载器状态及文件核对结果", name),
                 NotificationStatusEnum.ERROR);
     }
 
@@ -422,27 +423,26 @@ public class DownloadService {
      *
      * @param torrentsInfo 种子信息
      */
-    public void notification(TorrentsInfo torrentsInfo) {
+    public boolean notification(TorrentsInfo torrentsInfo) {
         Boolean finished = torrentsInfo.finished();
         String name = torrentsInfo.getName();
 
-        if (!finished) {
-            return;
-        }
-        // 添加下载完成标签，防止重复通知
+        if (!finished) return false;
+        // Only confirmed deliveries (or an intentional configuration skip) have this tag.
         List<String> tags = torrentsInfo.getTagList();
         if (tags.contains(TorrentsTagEnum.DOWNLOAD_COMPLETE.getValue())) {
-            return;
-        }
-        Boolean b = TorrentUtil.addTags(torrentsInfo, TorrentsTagEnum.DOWNLOAD_COMPLETE.getValue());
-        if (!b) {
-            return;
+            return true;
         }
         Optional<Ani> aniOpt = findAniByDownloadPath(torrentsInfo);
 
         if (aniOpt.isEmpty()) {
-            log.debug("未能获取番剧对象: {}", torrentsInfo.getName());
-            return;
+            String key = Objects.toString(torrentsInfo.getId(), Objects.toString(torrentsInfo.getHash(), "unknown"));
+            long now = System.currentTimeMillis();
+            if (now - COMPLETION_WARNINGS.getOrDefault(key, 0L) >= 300_000L) {
+                COMPLETION_WARNINGS.put(key, now);
+                log.warn("完成通知暂缓：未匹配订阅 task={} title={} path={}", key, name, torrentsInfo.getSavePath());
+            }
+            return false;
         }
 
         Ani ani = aniOpt.get();
@@ -476,16 +476,18 @@ public class DownloadService {
         if (tags.contains(TorrentsTagEnum.STANDBY_RSS.getValue())) {
             text = StrFormatter.format("(备用RSS) {}", text);
         }
-        NotificationUtil.send(CONFIG, ani, text, NotificationStatusEnum.DOWNLOAD_END);
+        String deliveryKey = CONFIG.getDownloadToolType() + ":" + torrentsInfo.getId() + ":" + torrentsInfo.getHash() + ":" + torrentsInfo.getSavePath();
+        NotificationUtil.sendCompletion(CONFIG, ani, text, deliveryKey, () -> {
+            if (!TorrentUtil.addTags(torrentsInfo, TorrentsTagEnum.DOWNLOAD_COMPLETE.getValue())) return false;
+            try {
+                AniUtil.completed(ani);
+            } catch (Exception e) {
+                log.error("番剧完结迁移失败 {}", ani.getTitle(), e);
+            }
+            return true;
+        });
 
-        String title = ani.getTitle();
-
-        try {
-            AniUtil.completed(ani);
-        } catch (Exception e) {
-            log.error("番剧完结迁移失败 {}", title);
-            log.error(e.getMessage(), e);
-        }
+        return false; // Keep the task until the asynchronous acknowledgement is persisted.
     }
 
     /**
