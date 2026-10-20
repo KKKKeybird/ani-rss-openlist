@@ -433,7 +433,10 @@ public class DownloadService {
         if (tags.contains(TorrentsTagEnum.DOWNLOAD_COMPLETE.getValue())) {
             return true;
         }
-        Optional<Ani> aniOpt = findAniByDownloadPath(torrentsInfo);
+        boolean collection = torrentsInfo.getCollectionNotification() != null;
+        Optional<Ani> aniOpt = collection
+                ? Optional.of(ObjectUtil.clone(torrentsInfo.getCollectionNotification()))
+                : findAniByDownloadPath(torrentsInfo);
 
         if (aniOpt.isEmpty()) {
             String key = Objects.toString(torrentsInfo.getId(), Objects.toString(torrentsInfo.getHash(), "unknown"));
@@ -463,7 +466,7 @@ public class DownloadService {
         ani.setSubgroup(subgroup);
 
         Boolean scrape = CONFIG.getScrape();
-        if (scrape) {
+        if (scrape && !collection) {
             try {
                 // 刮削
                 scrapeService.scrape(ani, false);
@@ -480,7 +483,7 @@ public class DownloadService {
         NotificationUtil.sendCompletion(CONFIG, ani, text, deliveryKey, () -> {
             if (!TorrentUtil.addTags(torrentsInfo, TorrentsTagEnum.DOWNLOAD_COMPLETE.getValue())) return false;
             try {
-                AniUtil.completed(ani);
+                if (!collection) AniUtil.completed(ani);
             } catch (Exception e) {
                 log.error("番剧完结迁移失败 {}", ani.getTitle(), e);
             }

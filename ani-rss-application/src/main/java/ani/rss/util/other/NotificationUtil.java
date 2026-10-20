@@ -134,6 +134,13 @@ public class NotificationUtil {
                 if (!Boolean.TRUE.equals(source.getEnable()) || source.getStatusList() == null
                         || !source.getStatusList().contains(NotificationStatusEnum.DOWNLOAD_END)
                         || source.getNotificationType() == null || !NOTIFICATION_MAP.containsKey(source.getNotificationType())) continue;
+                if (ani.getCollectionDownloadPath() != null
+                        && (source.getNotificationType() == NotificationTypeEnum.FILE_MOVE
+                        || source.getNotificationType() == NotificationTypeEnum.OPEN_LIST_UPLOAD)) {
+                    // This subject describes cloud files, not a local subscription directory.
+                    log.info("OpenList 合集跳过本地文件处理渠道 task={} type={}", task, source.getNotificationType());
+                    continue;
+                }
                 var snapshot = cn.hutool.core.util.ObjectUtil.clone(source);
                 var subject = cn.hutool.core.util.ObjectUtil.clone(ani);
                 String key = cn.hutool.crypto.digest.DigestUtil.sha256Hex(ordinal + ":"

@@ -22,6 +22,7 @@ import wushuo.tmdb.api.entity.Tmdb;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 
 public interface BaseNotification {
 
@@ -79,10 +80,11 @@ public interface BaseNotification {
      */
     default String replaceNotificationTemplate(Ani ani, String notificationTemplate, String text, NotificationStatusEnum notificationStatusEnum) {
         notificationTemplate = notificationTemplate.replace("${text}", text);
+        boolean collection = ani.getCollectionDownloadPath() != null;
 
         // 集数
         double episode = 1.0;
-        if (ReUtil.contains(StringEnum.SEASON_REG, text)) {
+        if (!collection && ReUtil.contains(StringEnum.SEASON_REG, text)) {
             episode = Double.parseDouble(ReUtil.get(StringEnum.SEASON_REG, text, 2));
         }
 
@@ -94,19 +96,15 @@ public interface BaseNotification {
         }
 
         notificationTemplate = notificationTemplate.replace("${episode}",
-                NumberFormatUtils.format(episode, 1, 0)
+                collection ? "" : NumberFormatUtils.format(episode, 1, 0)
         );
-        notificationTemplate = notificationTemplate.replace("${episodeFormat}", episodeFormat);
+        notificationTemplate = notificationTemplate.replace("${episodeFormat}", collection ? "" : episodeFormat);
 
 
         Date releaseDate = ani.getReleaseDate();
-        int year = DateUtil.year(releaseDate);
-        int month = DateUtil.month(releaseDate) + 1;
-        int date = DateUtil.dayOfMonth(releaseDate);
-
-        notificationTemplate = notificationTemplate.replace("${year}", String.valueOf(year));
-        notificationTemplate = notificationTemplate.replace("${month}", String.valueOf(month));
-        notificationTemplate = notificationTemplate.replace("${date}", String.valueOf(date));
+        notificationTemplate = notificationTemplate.replace("${year}", releaseDate == null ? "" : String.valueOf(DateUtil.year(releaseDate)));
+        notificationTemplate = notificationTemplate.replace("${month}", releaseDate == null ? "" : String.valueOf(DateUtil.month(releaseDate) + 1));
+        notificationTemplate = notificationTemplate.replace("${date}", releaseDate == null ? "" : String.valueOf(DateUtil.dayOfMonth(releaseDate)));
 
         List<Func1<Ani, Object>> list = List.of(
                 Ani::getTitle,
@@ -119,11 +117,16 @@ public interface BaseNotification {
                 Ani::getSubgroup
         );
 
-        int season = ani.getSeason();
-        String seasonFormat = String.format("%02d", season);
+        Integer season = ani.getSeason();
+        String seasonFormat = season == null ? "" : String.format("%02d", season);
         notificationTemplate = notificationTemplate.replace("${seasonFormat}", seasonFormat);
 
         notificationTemplate = RenameUtil.replaceField(notificationTemplate, ani, list);
+        if (collection) {
+            // Missing legacy metadata stays empty, rather than guessed or left as tokens.
+            notificationTemplate = notificationTemplate.replaceAll(
+                    "\\$\\{(?:title|score|season|themoviedbName|bgmUrl|currentEpisodeNumber|totalEpisodeNumber|subgroup)\\}", "");
+        }
 
         String tmdbId = Optional.of(ani)
                 .map(Ani::getTmdb)
@@ -148,16 +151,19 @@ public interface BaseNotification {
         notificationTemplate = notificationTemplate.replace("${emoji}", emoji);
         notificationTemplate = notificationTemplate.replace("${action}", action);
 
-        DownloadService downloadService = SpringUtil.getBean(DownloadService.class);
-        String downloadPath = downloadService.getDownloadPath(ani);
+        String downloadPath = collection ? ani.getCollectionDownloadPath()
+                : SpringUtil.getBean(DownloadService.class).getDownloadPath(ani);
         notificationTemplate = notificationTemplate.replace("${downloadPath}", downloadPath);
 
         if (notificationTemplate.contains("${jpTitle}")) {
-            String jpTitle = RenameUtil.getJpTitle(ani);
+            String jpTitle = collection ? Objects.toString(ani.getJpTitle(), "") : RenameUtil.getJpTitle(ani);
             notificationTemplate = notificationTemplate.replace("${jpTitle}", jpTitle);
         }
 
-        notificationTemplate = RenameUtil.replaceEpisodeTitle(notificationTemplate, episode, ani);
+        notificationTemplate = collection
+                ? notificationTemplate.replace("${episodeTitle}", "").replace("${bgmEpisodeTitle}", "")
+                        .replace("${bgmJpEpisodeTitle}", "")
+                : RenameUtil.replaceEpisodeTitle(notificationTemplate, episode, ani);
 
         if (!notificationTemplate.contains("${notification}")) {
             return notificationTemplate.trim();

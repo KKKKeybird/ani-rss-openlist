@@ -20,6 +20,9 @@ import java.util.function.Supplier;
 @Accessors(chain = true)
 @Schema(description = "种子信息")
 public class TorrentsInfo implements Serializable {
+    /** Internal notification subject; never exposed in the download-list JSON. */
+    private transient ani.rss.entity.Ani collectionNotification;
+
     @Schema(description = "id")
     private String id;
 

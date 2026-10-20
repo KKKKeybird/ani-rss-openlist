@@ -15,6 +15,7 @@ import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ReUtil;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -143,6 +144,7 @@ public class OpenList implements BaseDownload {
                     .setCategory(TorrentsTagEnum.ANI_RSS.getValue())
                     .setTagList(List.copyOf(task.getTags()))
                     .setSavePath(task.getSavePath())
+                    .setCollectionNotification(OpenListCollectionNotifications.subject(task))
                     .setFilesSupplier(() -> taskFiles)
                     .progress(completedBytes, size);
             if (!task.isCompleted()) {
@@ -155,7 +157,7 @@ public class OpenList implements BaseDownload {
 
     /** Submit immediately; the regular task poller handles completion and restart recovery. */
     public synchronized void downloadCollection(String name, TorrentMetadata torrent, String savePath,
-                                                List<Item> items, List<String> tags) {
+                                                List<Item> items, List<String> tags, Ani notificationSubject) {
         List<OpenListTaskStore.CollectionFile> entries = items.stream().map(item ->
                 new OpenListTaskStore.CollectionFile().setSource(item.getTitle())
                         .setTarget(item.getReName()).setLength(item.getLength())).toList();
@@ -174,6 +176,7 @@ public class OpenList implements BaseDownload {
         Assert.isTrue(openListUtil.mkdir(stage), "OpenList 创建暂存目录失败: {}", stage);
         String tid = openListUtil.fsAddOfflineDownload(torrent.getMagnetUri(), stage, CONFIG.getProvider());
         taskStore.submitted(new OpenListTaskStore.Task().setId(tid).setHash(hash).setName(name)
+                .setCollectionNotification(ObjectUtil.clone(notificationSubject))
                 .setSavePath(savePath).setStagingPath(stage).setTags(new ArrayList<>(tags))
                 .setCollectionFiles(entries).setSubmittedAt(System.currentTimeMillis()));
     }

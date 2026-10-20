@@ -1,6 +1,8 @@
 package ani.rss.download;
 
 import ani.rss.entity.OpenListTaskInfo;
+import ani.rss.entity.Ani;
+import cn.hutool.core.util.ObjectUtil;
 import ani.rss.handle.JsonFile;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -164,6 +166,7 @@ public class OpenListTaskStore {
                 .setId(source.getId())
                 .setHash(source.getHash())
                 .setName(source.getName())
+                .setCollectionNotification(ObjectUtil.clone(source.getCollectionNotification()))
                 .setSavePath(source.getSavePath())
                 .setStagingPath(source.getStagingPath())
                 .setStagingCheckedAt(source.getStagingCheckedAt())
@@ -252,6 +255,7 @@ public class OpenListTaskStore {
         private String id;
         private String hash;
         private String name;
+        private Ani collectionNotification;
         private String savePath;
         private String stagingPath;
         private long stagingCheckedAt;

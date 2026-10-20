@@ -35,7 +35,7 @@ class OpenListCollectionServiceTest {
             service.startCollection(collection);
             verify(openList).downloadCollection(eq("[Group] Show 第1季"),
                     argThat(metadata -> metadata.getHash().length() == 40 && metadata.getMagnetUri().contains("urn:btih:")),
-                    eq("/anime/Show"), eq(preview), eq(List.of("ANI-RSS合集下载", "Group")));
+                    eq("/anime/Show"), eq(preview), eq(List.of("ANI-RSS合集下载", "Group")), eq(collection.getAni()));
         } finally {
             ConfigUtil.CONFIG.setDownloadToolType(previous);
         }

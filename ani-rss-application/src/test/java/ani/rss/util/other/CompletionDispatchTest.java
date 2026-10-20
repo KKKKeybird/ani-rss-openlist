@@ -28,6 +28,32 @@ class CompletionDispatchTest {
             verify(sender,times(2)).send(any(),any(),eq("done"),eq(NotificationStatusEnum.DOWNLOAD_END));
             String receipt=Files.readString(directory.resolve("cache/notification-deliveries.json"));
             assertFalse(receipt.contains("test-secret"));
+
+            // A standalone cloud collection uses the same delivery/receipt machinery.
+            var localMove=new NotificationConfig().setEnable(true).setSort(2L)
+                    .setNotificationType(NotificationTypeEnum.FILE_MOVE)
+                    .setStatusList(List.of(NotificationStatusEnum.DOWNLOAD_END));
+            var upload=new NotificationConfig().setEnable(true).setSort(3L)
+                    .setNotificationType(NotificationTypeEnum.OPEN_LIST_UPLOAD)
+                    .setStatusList(List.of(NotificationStatusEnum.DOWNLOAD_END));
+            config.setNotificationConfigList(List.of(channel,localMove,upload));
+            var collection=new Ani().setTitle("Collection").setMessage(true)
+                    .setCollectionDownloadPath("/115/Anime/Collection");
+            var collectionDone=new CountDownLatch(1);
+            NotificationUtil.sendCompletion(config,collection,"done","collection-task",
+                    ()->{collectionDone.countDown();return true;});
+            assertTrue(collectionDone.await(10,TimeUnit.SECONDS));
+            verify(sender).send(any(),argThat(subject->"/115/Anime/Collection".equals(subject.getCollectionDownloadPath())),
+                    eq("done"),eq(NotificationStatusEnum.DOWNLOAD_END));
+            reflect.verify(()->ReflectUtil.newInstance(ani.rss.notification.FileMoveNotification.class),never());
+            reflect.verify(()->ReflectUtil.newInstance(ani.rss.notification.OpenListUploadNotification.class),never());
+
+            collection.setMessage(false);
+            var disabledDone=new CountDownLatch(1);
+            NotificationUtil.sendCompletion(config,collection,"done","disabled-collection",
+                    ()->{disabledDone.countDown();return true;});
+            assertTrue(disabledDone.await(10,TimeUnit.SECONDS));
+            verify(sender,times(3)).send(any(),any(),eq("done"),eq(NotificationStatusEnum.DOWNLOAD_END));
         }
     }
 }

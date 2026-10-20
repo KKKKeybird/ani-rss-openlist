@@ -73,7 +73,7 @@ public class CollectionService {
         if ("OpenList".equals(CONFIG.getDownloadToolType())) {
             Assert.isTrue(TorrentUtil.login(), "下载器登录失败");
             openList.downloadCollection(name, torrentFile, downloadPath, preview(collectionInfo),
-                    List.of("ANI-RSS合集下载", subgroup));
+                    List.of("ANI-RSS合集下载", subgroup), ani);
             return;
         }
         download(name, tempFile, downloadPath, List.of("ANI-RSS合集下载", subgroup));

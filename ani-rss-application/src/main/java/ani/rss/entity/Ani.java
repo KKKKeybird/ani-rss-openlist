@@ -20,6 +20,10 @@ import java.util.List;
 @Accessors(chain = true)
 @Schema(description = "订阅")
 public class Ani implements Serializable {
+    /** Literal task destination used only by standalone collection notifications. */
+    @Schema(hidden = true)
+    private String collectionDownloadPath;
+
     private Integer sort;
 
     /**
