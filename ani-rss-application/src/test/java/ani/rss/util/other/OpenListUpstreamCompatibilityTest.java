@@ -8,6 +8,9 @@ import ani.rss.handle.JsonWriter;
 import ani.rss.download.BaseDownload;
 import ani.rss.download.OpenList;
 import ani.rss.download.qBittorrent;
+import ani.rss.util.basic.LogUtil;
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +49,65 @@ class OpenListUpstreamCompatibilityTest {
         assertEquals("115 Open", config.getProvider());
         assertEquals(60, config.getOpenListDownloadTimeout());
         assertEquals(5L, config.getOpenListDownloadRetryNumber());
+    }
+
+    @Test
+    void newRenameDefaultsRemoveYearAndTmdbIdFromVideoTitles() {
+        withFreshDefaults(() -> {
+            assertTrue(ConfigUtil.CONFIG.getRenameDelYear());
+            assertTrue(ConfigUtil.CONFIG.getRenameDelTmdbId());
+            assertEquals("Show", RenameUtil.renameDel("Show (2022) [tmdbid=123]"));
+            assertEquals("Show", RenameUtil.renameDel("Show (2022) {tmdb-123}"));
+        });
+    }
+
+    @Test
+    void persistedOpenListRenameChoicesOverrideNewDefaultsOnLoad() throws Exception {
+        for (boolean year : new boolean[]{false, true}) {
+            for (boolean tmdb : new boolean[]{false, true}) {
+                Files.writeString(directory.resolve("config.v2.json"), """
+                        {"downloadToolType":"OpenList","provider":"saved-driver",
+                         "renameDelYear":%s,"renameDelTmdbId":%s}
+                        """.formatted(year, tmdb));
+                withFreshDefaults(() -> {
+                    ConfigUtil.load();
+                    assertEquals("OpenList", ConfigUtil.CONFIG.getDownloadToolType());
+                    assertEquals("saved-driver", ConfigUtil.CONFIG.getProvider());
+                    assertEquals(year, ConfigUtil.CONFIG.getRenameDelYear());
+                    assertEquals(tmdb, ConfigUtil.CONFIG.getRenameDelTmdbId());
+                    String renamed = RenameUtil.renameDel("Show (2022) [tmdbid=123]");
+                    assertEquals(!year, renamed.contains("(2022)"));
+                    assertEquals(!tmdb, renamed.contains("[tmdbid=123]"));
+                });
+            }
+        }
+    }
+
+    @Test
+    void missingRenameOptionsReceiveNewDefaultsWithoutDroppingOpenListSettings() throws Exception {
+        Files.writeString(directory.resolve("config.v2.json"), """
+                {"downloadToolType":"OpenList","provider":"saved-driver",
+                 "openListDownloadTimeout":120,"openListDownloadRetryNumber":8}
+                """);
+        withFreshDefaults(() -> {
+            ConfigUtil.load();
+            assertTrue(ConfigUtil.CONFIG.getRenameDelYear());
+            assertTrue(ConfigUtil.CONFIG.getRenameDelTmdbId());
+            assertEquals("OpenList", ConfigUtil.CONFIG.getDownloadToolType());
+            assertEquals("saved-driver", ConfigUtil.CONFIG.getProvider());
+            assertEquals(120, ConfigUtil.CONFIG.getOpenListDownloadTimeout());
+            assertEquals(8L, ConfigUtil.CONFIG.getOpenListDownloadRetryNumber());
+        });
+    }
+
+    private void withFreshDefaults(Runnable action) {
+        Config previous = ObjectUtil.clone(ConfigUtil.CONFIG);
+        try (var downloader = mockStatic(TorrentUtil.class); var logs = mockStatic(LogUtil.class)) {
+            BeanUtil.copyProperties(DefaultConfigFactory.create(), ConfigUtil.CONFIG);
+            action.run();
+        } finally {
+            BeanUtil.copyProperties(previous, ConfigUtil.CONFIG);
+        }
     }
 
     @Test
