@@ -1,12 +1,12 @@
 # 项目结构与下载流程
 
-本次整理基于 `main` 的应用版本 `3.2.52`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+本次整理基于 `main` 的应用版本 `3.2.57`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 ## 模块
 
 | 模块或目录 | 职责 |
 | --- | --- |
-| `ani-rss-application` | Java 25、Spring Boot 4.1.1 后端，HTTP API、RSS 订阅、下载管理、重命名、刮削及通知 |
+| `ani-rss-application` | Java 25、Spring Boot 4.1.2 后端，HTTP API、RSS 订阅、下载管理、重命名、刮削及通知 |
 | `ani-rss-ui` | Vue 3、Element Plus、Vite 前端，Maven 调用 Node/pnpm 构建后打包进应用 |
 | `download` | `BaseDownload` 接口及 qBittorrent、Transmission、Aria2、OpenList 实现 |
 | `util/other/TorrentUtil` | 按配置加载下载器 Bean，统一登录、下载、任务查询、标签、删除和保存位置操作 |
@@ -43,7 +43,7 @@ OpenList 的通用离线 API 没有种子内文件优先级，排除规则只控
 
 ```sh
 mvn -B -pl ani-rss-application -am \
-  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest \
+  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 mvn -B -pl ani-rss-application -am -DskipTests package
 ```
@@ -53,3 +53,5 @@ mvn -B -pl ani-rss-application -am -DskipTests package
 OpenList 合集独立保存通知所需的 Ani 快照，查询任务时提供给完成通知流程，不插入 `ANI_LIST`，也不触发 RSS 检查、刮削或订阅完结迁移。旧合集按已记录的任务名称、字幕组和实际目录提供通知上下文，不推断缺失元数据。新合集显式关闭通知时保留该设置，旧合集按当前全局完成渠道处理。完成标签和按渠道的持久化成功记录继续去重，未完成任务不发送。合集通知模板使用任务实际目录；缺失日期、季号及单集信息留空。云端合集不执行仅适用于本地文件的移动/上传通知渠道。`OpenListCollectionNotificationTest` 覆盖提交持久化、跨重启、旧任务补通知、关闭通知、完成确认、模板和模拟 SMTP 提交；不发送真实邮件。
 
 上游 v3.2.52 的默认重命名设置启用剔除年份及 TMDB ID；已有配置中明确保存的开关继续保留，缺失字段沿用新默认值。新增回归通过真实配置加载流程检查 OpenList 设置保留及重命名结果。前端同步页面默认宽度 3200、AniBT 图标和依赖；Maven clean 插件清理 dist。
+
+上游 v3.2.53–v3.2.57 增加 `offset` 策略包和 `OffsetTypeEnum`。旧配置缺少 `offsetType` 时使用 Auto，新配置可选择 Bangumi；主/备用 RSS 共用策略实例但分别计算偏移。Bangumi 首集缓存使用稳定条目 ID，剧集标题与进度关联按所选编号策略匹配。MCP 接收完整订阅对象用于预览、添加、编辑，文件删除默认关闭。新增 `Upstream357CompatibilityTest` 验证偏移（含半集及空 RSS）、策略缓存、主/备用 RSS、日期和合集通知快照重启、重命名、MCP 的覆盖及删除边界。

@@ -3,6 +3,7 @@ package ani.rss.entity;
 import ani.rss.enums.AniSortTypeEnum;
 import ani.rss.enums.BgmTokenTypeEnum;
 import com.google.gson.annotations.SerializedName;
+import ani.rss.enums.OffsetTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -210,6 +211,12 @@ public class Config implements Serializable {
      */
     @Schema(description = "自动推断剧集偏移")
     private Boolean offset;
+
+    /**
+     * 自动偏移方式
+     */
+    @Schema(defaultValue = "自动偏移方式")
+    private OffsetTypeEnum offsetType;
 
     /**
      * 获取标题时带上年份
