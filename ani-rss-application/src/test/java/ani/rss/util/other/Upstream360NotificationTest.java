@@ -128,6 +128,13 @@ class Upstream360NotificationTest {
         assertEquals(2, messages.get());
     }
 
+    @Test void configurationTestCannotReportSuccessForFailedMessageResponse() {
+        failures.set(Integer.MAX_VALUE);
+        assertThrows(IllegalArgumentException.class, () -> new AstrBotNotification().test(
+                channel(), subject(), "done", NotificationStatusEnum.DOWNLOAD_END));
+        assertEquals(1, messages.get());
+    }
+
     @Test void uploadFailureCannotBecomeSuccessfulCompletion() throws Exception {
         cover();
         uploadStatus.set(403);

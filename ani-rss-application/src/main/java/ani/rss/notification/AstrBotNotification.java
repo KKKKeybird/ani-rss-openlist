@@ -30,7 +30,8 @@ public class AstrBotNotification implements BaseNotification {
      */
     @Override
     public void test(NotificationConfig notificationConfig, Ani ani, String text, NotificationStatusEnum notificationStatusEnum) {
-        send(notificationConfig, ani, text, notificationStatusEnum);
+        Assert.isTrue(Boolean.TRUE.equals(send(notificationConfig, ani, text, notificationStatusEnum)),
+                "AstrBot 通知发送失败，请检查目标 UMO 和服务返回结果");
     }
 
     /**
