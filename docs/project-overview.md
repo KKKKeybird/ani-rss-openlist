@@ -1,6 +1,6 @@
 # 项目结构与下载流程
 
-本次整理基于 `main` 的应用版本 `3.2.57`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+本次整理基于 `main` 的应用版本 `3.2.60`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 ## 模块
 
@@ -43,7 +43,7 @@ OpenList 的通用离线 API 没有种子内文件优先级，排除规则只控
 
 ```sh
 mvn -B -pl ani-rss-application -am \
-  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest \
+  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest,Upstream360NotificationTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 mvn -B -pl ani-rss-application -am -DskipTests package
 ```
@@ -55,3 +55,5 @@ OpenList 合集独立保存通知所需的 Ani 快照，查询任务时提供给
 上游 v3.2.52 的默认重命名设置启用剔除年份及 TMDB ID；已有配置中明确保存的开关继续保留，缺失字段沿用新默认值。新增回归通过真实配置加载流程检查 OpenList 设置保留及重命名结果。前端同步页面默认宽度 3200、AniBT 图标和依赖；Maven clean 插件清理 dist。
 
 上游 v3.2.53–v3.2.57 增加 `offset` 策略包和 `OffsetTypeEnum`。旧配置缺少 `offsetType` 时使用 Auto，新配置可选择 Bangumi；主/备用 RSS 共用策略实例但分别计算偏移。Bangumi 首集缓存使用稳定条目 ID，剧集标题与进度关联按所选编号策略匹配。MCP 接收完整订阅对象用于预览、添加、编辑，文件删除默认关闭。新增 `Upstream357CompatibilityTest` 验证偏移（含半集及空 RSS）、策略缓存、主/备用 RSS、日期和合集通知快照重启、重命名、MCP 的覆盖及删除边界。
+
+上游 v3.2.58–v3.2.60 新增 AstrBot 渠道及图文上传、通知管理界面和 AnimeGarden 图片接口调整。新渠道接入现有完成通知重试和持久化去重；旧渠道计算摘要时排除新增且与该渠道无关的 AstrBot 字段，以兼容已写入的成功记录。`Upstream360NotificationTest` 通过本地模拟 HTTP 服务验证文本、图片、API 失败及上传权限错误，并验证旧记录跨重启只重试失败渠道。Linux 安装/管理脚本及 docker/run.sh 补下载地址指向本 fork，脚本做语法验证，不在生产环境执行安装。

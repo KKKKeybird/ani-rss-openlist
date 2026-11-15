@@ -27,19 +27,21 @@ public class NotificationUtil {
             .setWorkQueue(new LinkedBlockingQueue<>(256))
             .build();
 
+    // 通知类型超过十种，使用 ofEntries 注册各类型的实现。
     public final static Map<NotificationTypeEnum, Class<? extends BaseNotification>>
             NOTIFICATION_MAP =
-            Map.of(
-                    NotificationTypeEnum.EMBY_REFRESH, EmbyRefreshNotification.class,
-                    NotificationTypeEnum.MAIL, MailNotification.class,
-                    NotificationTypeEnum.SERVER_CHAN, ServerChanNotification.class,
-                    NotificationTypeEnum.SYSTEM, SystemNotification.class,
-                    NotificationTypeEnum.TELEGRAM, TelegramNotification.class,
-                    NotificationTypeEnum.WEB_HOOK, WebHookNotification.class,
-                    NotificationTypeEnum.SHELL, ShellNotification.class,
-                    NotificationTypeEnum.FILE_MOVE, FileMoveNotification.class,
-                    NotificationTypeEnum.OPEN_LIST_UPLOAD, OpenListUploadNotification.class,
-                    NotificationTypeEnum.BARK, BarkNotification.class
+            Map.ofEntries(
+                    Map.entry(NotificationTypeEnum.EMBY_REFRESH, EmbyRefreshNotification.class),
+                    Map.entry(NotificationTypeEnum.MAIL, MailNotification.class),
+                    Map.entry(NotificationTypeEnum.SERVER_CHAN, ServerChanNotification.class),
+                    Map.entry(NotificationTypeEnum.SYSTEM, SystemNotification.class),
+                    Map.entry(NotificationTypeEnum.TELEGRAM, TelegramNotification.class),
+                    Map.entry(NotificationTypeEnum.WEB_HOOK, WebHookNotification.class),
+                    Map.entry(NotificationTypeEnum.SHELL, ShellNotification.class),
+                    Map.entry(NotificationTypeEnum.FILE_MOVE, FileMoveNotification.class),
+                    Map.entry(NotificationTypeEnum.OPEN_LIST_UPLOAD, OpenListUploadNotification.class),
+                    Map.entry(NotificationTypeEnum.BARK, BarkNotification.class),
+                    Map.entry(NotificationTypeEnum.ASTRBOT, AstrBotNotification.class)
             );
 
     /**
@@ -143,8 +145,7 @@ public class NotificationUtil {
                 }
                 var snapshot = cn.hutool.core.util.ObjectUtil.clone(source);
                 var subject = cn.hutool.core.util.ObjectUtil.clone(ani);
-                String key = cn.hutool.crypto.digest.DigestUtil.sha256Hex(ordinal + ":"
-                        + GsonStatic.toJson(snapshot));
+                String key = completionChannelKey(ordinal, snapshot);
                 BaseNotification sender = ReflectUtil.newInstance(NOTIFICATION_MAP.get(snapshot.getNotificationType()));
                 channels.add(new CompletionNotificationDelivery.Channel(key, () -> deliver(
                         sender, snapshot, subject, text, NotificationStatusEnum.DOWNLOAD_END)));
@@ -154,4 +155,14 @@ public class NotificationUtil {
         CompletionHolder.DELIVERY.submit(task, channels, acknowledge);
     }
 
+    static String completionChannelKey(int ordinal, NotificationConfig config) {
+        var json = GsonStatic.GSON.toJsonTree(config).getAsJsonObject();
+        if (config.getNotificationType() != NotificationTypeEnum.ASTRBOT) {
+            // New unrelated defaults must not invalidate receipts for existing channels.
+            for (String field : List.of("astrBotHost", "astrBotApiKey", "astrBotUmo", "astrBotImage")) {
+                json.remove(field);
+            }
+        }
+        return cn.hutool.crypto.digest.DigestUtil.sha256Hex(ordinal + ":" + GsonStatic.toJson(json));
+    }
 }
