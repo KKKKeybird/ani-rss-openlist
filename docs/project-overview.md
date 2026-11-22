@@ -1,12 +1,12 @@
 # 项目结构与下载流程
 
-本次整理基于 `main` 的应用版本 `3.2.60`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+本次整理基于 `main` 的应用版本 `3.2.63`。项目在 ANI-RSS 上游代码上维护原生 OpenList 后端，GitHub 仓库目前保留 fork 关系。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 ## 模块
 
 | 模块或目录 | 职责 |
 | --- | --- |
-| `ani-rss-application` | Java 25、Spring Boot 4.1.2 后端，HTTP API、RSS 订阅、下载管理、重命名、刮削及通知 |
+| `ani-rss-application` | Java 25、Spring Boot 4.2.0 后端，HTTP API、RSS 订阅、下载管理、重命名、刮削及通知 |
 | `ani-rss-ui` | Vue 3、Element Plus、Vite 前端，Maven 调用 Node/pnpm 构建后打包进应用 |
 | `download` | `BaseDownload` 接口及 qBittorrent、Transmission、Aria2、OpenList 实现 |
 | `util/other/TorrentUtil` | 按配置加载下载器 Bean，统一登录、下载、任务查询、标签、删除和保存位置操作 |
@@ -43,9 +43,9 @@ OpenList 的通用离线 API 没有种子内文件优先级，排除规则只控
 
 ```sh
 mvn -B -pl ani-rss-application -am \
-  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest,Upstream360NotificationTest \
+  -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest,Upstream360NotificationTest,Upstream363LoginReminderTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
-mvn -B -pl ani-rss-application -am -DskipTests package
+mvn -B package -DskipTests -P windows --file pom.xml
 ```
 
 回归覆盖任务记录持久化、API 方法与错误处理、后台移动等待、合集多集及字幕归档、路径匹配、冲突与缺失文件、中断恢复、失效任务清理及删除失败保护、删除时中止当前下载，以及 qBittorrent 保留文件删除和上游配置兼容。
@@ -57,3 +57,5 @@ OpenList 合集独立保存通知所需的 Ani 快照，查询任务时提供给
 上游 v3.2.53–v3.2.57 增加 `offset` 策略包和 `OffsetTypeEnum`。旧配置缺少 `offsetType` 时使用 Auto，新配置可选择 Bangumi；主/备用 RSS 共用策略实例但分别计算偏移。Bangumi 首集缓存使用稳定条目 ID，剧集标题与进度关联按所选编号策略匹配。MCP 接收完整订阅对象用于预览、添加、编辑，文件删除默认关闭。新增 `Upstream357CompatibilityTest` 验证偏移（含半集及空 RSS）、策略缓存、主/备用 RSS、日期和合集通知快照重启、重命名、MCP 的覆盖及删除边界。
 
 上游 v3.2.58–v3.2.60 新增 AstrBot 渠道及图文上传、通知管理界面和 AnimeGarden 图片接口调整。新渠道接入现有完成通知重试和持久化去重；旧渠道计算摘要时排除新增且与该渠道无关的 AstrBot 字段，以兼容已写入的成功记录。`Upstream360NotificationTest` 通过本地模拟 HTTP 服务验证文本、图片、API 失败及上传权限错误，并验证旧记录跨重启只重试失败渠道。Linux 安装/管理脚本及 docker/run.sh 补下载地址指向本 fork，脚本做语法验证，不在生产环境执行安装。
+
+上游 v3.2.61–v3.2.63 将 WASM 播放器改为打开时动态加载，并在登录用户名和密码均为默认值时显示提示。后端在脱敏前计算提示状态，设置页支持直接定位安全页签。新增 `Upstream363LoginReminderTest`，覆盖旧配置及只修改用户名或密码的判断。发布使用 Maven 的 `windows` profile 打包 JAR 和 EXE，Temurin 和 OpenJ9 构建主动拉取基础镜像。

@@ -28,7 +28,7 @@
 
 这是基于 [ANI-RSS 上游项目](https://github.com/wushuo894/ani-rss) 的社区维护 fork。这里的 `main` 持续维护原生 OpenList 下载器，供需要 OpenList 的用户跟踪和贡献；它不是上游官方发布版本。
 
-当前基于上游 `v3.2.60`，支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
+当前基于上游 `v3.2.63`，支持 OpenList 合集下载（沿用合集预览、匹配/排除规则、集数偏移及重命名模板），以及 Ani-RSS 创建的 OpenList 任务列表、进度和标签持久化，云端重命名与移动、完成通知、删除及保存路径调整。接口按 [OpenList v4.2.6 官方文档](https://doc.oplist.org/api/apidocs)核对，具体改动见 [兼容路线与实现记录](docs/openlist-compat-evaluation.md)。维护者已持续在实际 OpenList 环境中测试，确认可正常使用。
 
 **批量添加订阅：** 上游 `.45` 支持逐项编辑后确认添加，解析失败的条目可单独重试；同番剧选中的其他 RSS 作为备用 RSS，分别计算集数偏移。上游已移除“自动复制主 RSS 至备用 RSS”开关，已有订阅的备用 RSS 记录继续保留。
 
@@ -151,3 +151,5 @@ SharonNetworks 为您的业务起飞保驾护航！
 **上游 v3.2.53–v3.2.57：** 同步 MCP 订阅解析、预览、添加、编辑和删除工具，新增 Auto/Bangumi 自动偏移选择；主/备用 RSS 保持独立偏移。Bangumi 模式跟随正篇连续编号，并按上游规则在跨季连续编号时设为第 1 季。同步日期解析、重命名和首页删除刷新修复，OpenList 的合集及独立完成通知继续保留。
 
 **上游 v3.2.58–v3.2.60：** 新增 AstrBot 文本/封面图文通知，优化通知管理页面及启用状态操作，更新 AnimeGarden 封面接口。新增字段不改变旧渠道的完成通知去重记录。Linux 安装脚本及启动补下载使用本 fork 的 Release，保留 OpenList 支持。
+
+**上游 v3.2.61–v3.2.63：** WASM 播放器按需加载。用户名和密码均为默认值时，登录后可从提醒进入安全设置。同步后端和前端依赖更新，继续支持原生 OpenList。

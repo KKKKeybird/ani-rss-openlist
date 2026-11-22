@@ -7,6 +7,7 @@ import ani.rss.enums.NotificationStatusEnum;
 import ani.rss.notification.BaseNotification;
 import ani.rss.service.DownloadService;
 import ani.rss.util.other.*;
+import cn.hutool.core.date.DateUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
@@ -49,8 +50,9 @@ class OpenListCollectionNotificationTest {
     }
 
     @Test void snapshotSurvivesRestartAndCannotBeMutatedThroughStoreCopies() {
+        Date releaseDate = DateUtil.parseDate("2022-05-14");
         var subject = new Ani().setTitle("Show").setSeason(2).setMessage(false)
-                .setImage("https://example.test/cover.jpg").setReleaseDate(new Date(0));
+                .setImage("https://example.test/cover.jpg").setReleaseDate(releaseDate);
         var task = task().setCollectionNotification(subject);
         var store = store(task);
         subject.setTitle("changed input");
@@ -60,7 +62,7 @@ class OpenListCollectionNotificationTest {
         assertEquals("Show", restored.getTitle());
         assertEquals(2, restored.getSeason());
         assertFalse(restored.getMessage());
-        assertEquals(new Date(0), restored.getReleaseDate());
+        assertEquals(releaseDate, restored.getReleaseDate());
         assertEquals(task.getSavePath(), restored.getCollectionDownloadPath());
         assertFalse(restored.getEnable());
         assertFalse(GsonStatic.toJson(info).contains("collectionNotification"));

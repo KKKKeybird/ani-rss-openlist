@@ -34,7 +34,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Verify OpenList compatibility
-        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest,Upstream360NotificationTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn -B -pl ani-rss-application -am -Dtest=OpenListTaskStoreTest,OpenListUtilTest,OpenListCollectionOrganizerTest,OpenListCollectionServiceTest,OpenListUpstreamCompatibilityTest,OpenListCompletionVerifierTest,OpenListStagingCleanerTest,OpenListTaskDeletionTest,DownloadTaskDeletionTest,UpstreamBatchSubscriptionTest,OpenListRecoveryTest,OpenListOrdinaryPlanTest,UpstreamPinyinCompatibilityTest,UpstreamSubscriptionOverrideTest,UpstreamProcrastinatingTest,TorrentFilenameEncodingTest,CompletionNotificationDeliveryTest,NotificationResultTest,DownloadCompletionNotificationTest,RenameTaskNotificationTest,CompletionDispatchTest,OpenListCollectionNotificationTest,Upstream357CompatibilityTest,Upstream360NotificationTest,Upstream363LoginReminderTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Build release artifacts
         env:
           REPLACE_EXISTING_RELEASE: ${{ inputs.replace_existing_release }}
@@ -45,7 +45,7 @@ jobs:
             echo "::error::Release revision must be empty or r followed by a positive integer, for example r1"
             exit 1
           fi
-          bash ./package.sh
+          mvn -B package -DskipTests -P windows --file pom.xml
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f pom.xml)
           release_tag="v${version}-openlist"
           if [ -n "$RELEASE_REVISION" ]; then
@@ -120,6 +120,7 @@ jobs:
           context: ./
           file: ./docker/Dockerfile
           platforms: linux/amd64,linux/arm64
+          pull: true
           push: true
           tags: |
             ghcr.io/kkkkeybird/ani-rss-openlist:latest
@@ -132,6 +133,7 @@ jobs:
           context: ./
           file: ./docker/Dockerfile-openj9
           platforms: linux/amd64,linux/arm64
+          pull: true
           push: true
           tags: |
             ghcr.io/kkkkeybird/ani-rss-openlist:openj9
